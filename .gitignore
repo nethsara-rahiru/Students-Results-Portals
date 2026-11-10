@@ -1,3 +1,9 @@
 node_modules/
 .env
-.DS_Store
+.env.*
+!.env.example
+test-results/
+playwright-report/
+coverage/
+*.log
+backups/
