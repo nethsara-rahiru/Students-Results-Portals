@@ -12,7 +12,7 @@
     "dotenv": "^16.4.5",
     "bcryptjs": "^2.4.3",
     "helmet": "^8.0.0",
-    "expressSession": "^1.18.1",
+    "express-session": "^1.18.1",
     "express-rate-limit": "^7.5.0"
   }
 }
