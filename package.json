@@ -1,0 +1,18 @@
+{
+  "name": "levelup-results",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "mongodb": "^6.12.0",
+    "dotenv": "^16.4.5",
+    "bcryptjs": "^2.4.3",
+    "helmet": "^8.0.0",
+    "expressSession": "^1.18.1",
+    "express-rate-limit": "^7.5.0"
+  }
+}
