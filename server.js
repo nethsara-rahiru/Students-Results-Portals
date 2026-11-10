@@ -1,29 +1,181 @@
 import 'dotenv/config';
+import { pathToFileURL } from 'node:url';
+import { randomBytes, timingSafeEqual } from 'node:crypto';
 import express from 'express';
 import helmet from 'helmet';
 import session from 'express-session';
-import {MongoClient,ObjectId} from 'mongodb';
+import MongoStore from 'connect-mongo';
+import { MongoClient, ObjectId } from 'mongodb';
 import bcrypt from 'bcryptjs';
-import {rateLimit} from 'express-rate-limit';
-const {MONGODB_URI,SESSION_SECRET,ADMIN_PASSWORD_HASH,ADMIN_USERNAME='admin',PORT=3000}=process.env;
-if(!MONGODB_URI||!SESSION_SECRET||SESSION_SECRET.length<24||!ADMIN_PASSWORD_HASH)throw Error('Set MONGODB_URI, SESSION_SECRET (24+ chars), ADMIN_PASSWORD_HASH');
-const client=new MongoClient(MONGODB_URI);await client.connect();const db=client.db('levelup_results');
-await db.collection('marks').createIndex({studentId:1,paperId:1},{unique:true});
-const app=express();app.disable('x-powered-by');app.use(helmet({contentSecurityPolicy:false}));app.use(express.json({limit:'30kb'}));
-app.use(session({secret:SESSION_SECRET,resave:false,saveUninitialized:false,cookie:{httpOnly:true,sameSite:'lax',secure:process.env.NODE_ENV==='production',maxAge:28800000}}));
-const clean=s=>String(s||'').trim().replace(/\s+/g,' '),norm=s=>clean(s).toLowerCase(),oid=s=>ObjectId.isValid(s)?new ObjectId(s):null;
-const err=(res,msg,code=400)=>res.status(code).json({error:msg});
-const guard=(req,res,next)=>req.session.admin?next():err(res,'Unauthorized',401);
-const limit=rateLimit({windowMs:900000,limit:25,standardHeaders:'draft-7',legacyHeaders:false});
-app.use('/api',(req,res,next)=>{if(req.method!=='GET'&&req.headers.origin){try{if(new URL(req.headers.origin).host!==req.headers.host)return err(res,'Invalid origin',403)}catch{return err(res,'Invalid origin',403)}}next()});
-app.post('/api/login',limit,async(req,res)=>{if(req.body.username!==ADMIN_USERNAME||!await bcrypt.compare(String(req.body.password||''),ADMIN_PASSWORD_HASH))return err(res,'Invalid credentials',401);req.session.regenerate(e=>{if(e)return err(res,'Session failed',500);req.session.admin=true;res.json({ok:true})})});
-app.get('/api/me',(req,res)=>res.json({admin:!!req.session.admin}));
-app.post('/api/logout',guard,(req,res)=>req.session.destroy(()=>res.json({ok:true})));
-app.get('/api/admin/data',guard,async(req,res)=>{const [students,papers,marks]=await Promise.all([db.collection('students').find().sort({name:1}).toArray(),db.collection('papers').find().sort({order:1}).toArray(),db.collection('marks').find().toArray()]);res.json({students,papers,marks})});
-app.post('/api/admin/students',guard,async(req,res)=>{const name=clean(req.body.name);if(name.length<2||name.length>100)return err(res,'Invalid name');const r=await db.collection('students').insertOne({name,nameKey:norm(name)});res.json({id:r.insertedId})});
-app.post('/api/admin/papers',guard,async(req,res)=>{const name=clean(req.body.name),max=Number(req.body.max);if(!name||name.length>120||!Number.isInteger(max)||max<1||max>10000)return err(res,'Invalid paper');const last=await db.collection('papers').find().sort({order:-1}).limit(1).next();const r=await db.collection('papers').insertOne({name,max,order:(last?.order||0)+1,published:false});res.json({id:r.insertedId})});
-app.patch('/api/admin/papers/:id',guard,async(req,res)=>{const _id=oid(req.params.id);if(!_id||typeof req.body.published!=='boolean')return err(res,'Invalid request');await db.collection('papers').updateOne({_id},{$set:{published:req.body.published}});res.json({ok:true})});
-app.put('/api/admin/marks',guard,async(req,res)=>{const studentId=oid(req.body.studentId),paperId=oid(req.body.paperId),value=req.body.value;if(!studentId||!paperId)return err(res,'Invalid ID');const [s,p]=await Promise.all([db.collection('students').findOne({_id:studentId}),db.collection('papers').findOne({_id:paperId})]);if(!s||!p)return err(res,'Unknown student or paper',404);if(value!==null&&(!Number.isInteger(value)||value<0||value>p.max))return err(res,'Invalid mark');await db.collection('marks').updateOne({studentId,paperId},{$set:{value,updatedAt:new Date()}},{upsert:true});res.json({ok:true})});
-app.post('/api/lookup',limit,async(req,res)=>{const name=clean(req.body.name);if(name.length<2||name.length>100)return err(res,'Invalid name');const exact=await db.collection('students').find({nameKey:norm(name)}).project({name:1}).limit(5).toArray();if(exact.length)return res.json({exact:true,students:exact});const words=norm(name).split(' ').filter(w=>w.length>1).slice(0,3);const all=await db.collection('students').find().project({name:1}).limit(500).toArray();const similar=all.map(s=>({...s,rank:words.filter(w=>norm(s.name).includes(w)).length})).filter(s=>s.rank).sort((a,b)=>b.rank-a.rank).slice(0,5).map(({_id,name})=>({_id,name}));res.json({exact:false,students:similar})});
-app.get('/api/results/:id',limit,async(req,res)=>{const _id=oid(req.params.id);if(!_id)return err(res,'Invalid ID');const s=await db.collection('students').findOne({_id},{projection:{name:1}});if(!s)return err(res,'Not found',404);const papers=await db.collection('papers').find({published:true}).sort({order:1}).toArray();const marks=await db.collection('marks').find({studentId:_id}).toArray();const map=new Map(marks.map(m=>[String(m.paperId),m.value]));res.json({student:s.name,papers:papers.filter(p=>Number.isInteger(map.get(String(p._id)))).map(p=>({name:p.name,max:p.max,value:map.get(String(p._id))}))})});
-app.use(express.static('public'));app.get('*',(req,res)=>res.sendFile('index.html',{root:'public'}));app.listen(PORT,()=>console.log('LevelUp Results on port '+PORT));
+import { rateLimit } from 'express-rate-limit';
+import { z } from 'zod';
+
+export const clean = s => String(s ?? '').trim().replace(/\s+/g, ' ');
+export const normalize = s => clean(s).toLowerCase();
+const id = z.string().regex(/^[a-f\d]{24}$/i);
+const text = z.string().transform(clean).pipe(z.string().min(1).max(120));
+const studentSchema = z.object({name:text, classId:id.nullable().default(null), active:z.boolean().default(true), label:z.string().max(80).default(''), accessCode:z.string().max(128).optional()});
+const paperSchema = z.object({name:text, subject:z.string().max(80).default(''), grade:z.string().max(40).default(''), date:z.string().regex(/^\d{4}-\d{2}-\d{2}$/).or(z.literal('')).default(''), max:z.number().int().min(1).max(10000), classId:id.nullable().default(null), state:z.enum(['draft','published','unpublished']).default('draft')});
+const fail = (status, message) => Object.assign(new Error(message), {status});
+const wrap = fn => (req,res,next) => Promise.resolve(fn(req,res,next)).catch(next);
+const oid = value => new ObjectId(id.parse(value));
+
+export async function createApp({db, client, config = {}}) {
+  const production = config.production ?? process.env.NODE_ENV === 'production';
+  const secret = config.secret || process.env.SESSION_SECRET;
+  if (!secret || secret.length < 32) throw Error('SESSION_SECRET must contain at least 32 characters');
+  const accessMode = config.accessMode || process.env.STUDENT_ACCESS_MODE || 'name';
+  if (!['name','code'].includes(accessMode)) throw Error('Invalid STUDENT_ACCESS_MODE');
+  await Promise.all([
+    db.collection('students').createIndex({nameKey:1,active:1}),
+    db.collection('marks').createIndex({studentId:1,paperId:1},{unique:true}),
+    db.collection('papers').createIndex({order:1}),
+    db.collection('administrators').createIndex({username:1},{unique:true}),
+    db.collection('classes').createIndex({name:1},{unique:true}),
+    db.collection('auditLogs').createIndex({createdAt:-1}),
+  ]);
+  // Upgrade the original MVP without replacing stable IDs.
+  await db.collection('students').updateMany({active:{$exists:false}},{$set:{active:true}});
+  await db.collection('papers').updateMany({state:{$exists:false},published:true},{$set:{state:'published'}});
+  await db.collection('papers').updateMany({state:{$exists:false}},{$set:{state:'draft'}});
+  const username = config.username || process.env.ADMIN_USERNAME || 'admin';
+  const passwordHash = config.passwordHash || process.env.ADMIN_PASSWORD_HASH;
+  if (passwordHash) await db.collection('administrators').updateOne({username},{$setOnInsert:{username,passwordHash,createdAt:new Date()}},{upsert:true});
+  const app = express();
+  app.disable('x-powered-by');
+  if (production) app.set('trust proxy', Number(process.env.TRUST_PROXY_HOPS || 1));
+  app.use(helmet());
+  app.use(express.json({limit:'512kb'}));
+  app.use(session({name:'levelup.sid',secret,resave:false,saveUninitialized:false,
+    store:MongoStore.create({client,dbName:db.databaseName,collectionName:'sessions',ttl:28800}),
+    cookie:{httpOnly:true,sameSite:'strict',secure:production,maxAge:8*60*60*1000}}));
+  const limiter = (limit,windowMs=900000) => rateLimit({windowMs,limit,standardHeaders:'draft-7',legacyHeaders:false, handler:(_req,res)=>res.status(429).json({error:'Too many requests. Please try again later.'})});
+  app.use('/api',limiter(1200));
+  app.use('/api',(req,res,next)=>{res.set('Cache-Control','no-store');next()});
+  app.get('/api/session',(req,res)=>{req.session.csrf ||= randomBytes(32).toString('hex');res.json({admin:!!req.session.admin,csrf:req.session.csrf,accessMode})});
+  app.use('/api',(req,res,next)=>{
+    if (['GET','HEAD','OPTIONS'].includes(req.method)) return next();
+    const token = req.get('X-CSRF-Token') || '';
+    const expected = req.session.csrf || '';
+    if (!expected || token.length !== expected.length || !timingSafeEqual(Buffer.from(token),Buffer.from(expected))) return next(fail(403,'Invalid CSRF token'));
+    if (req.get('Origin') && req.get('Origin') !== `${req.protocol}://${req.get('host')}`) return next(fail(403,'Invalid origin'));
+    next();
+  });
+  const guard = (req,res,next) => req.session.admin ? next() : next(fail(401,'Administrator login required'));
+  const audit = (req,action,entity,changes) => db.collection('auditLogs').insertOne({actor:req.session.admin,action,entity,changes,createdAt:new Date()});
+  app.post('/api/login',limiter(10),wrap(async(req,res)=>{
+    const {username,password}=z.object({username:z.string().max(100),password:z.string().max(256)}).parse(req.body);
+    const admin=await db.collection('administrators').findOne({username});
+    // Use the same costly comparison even for unknown usernames.
+    const valid=await bcrypt.compare(password,admin?.passwordHash || '$2a$12$XfBICb8dJf6eLEhTtjlMdOzII0S17uBvUbr2vIWcG7SCiI5Yj4y2W');
+    if(!admin || !valid) throw fail(401,'Invalid credentials');
+    await new Promise((resolve,reject)=>req.session.regenerate(e=>e?reject(e):resolve()));
+    req.session.admin=admin.username;req.session.csrf=randomBytes(32).toString('hex');
+    await audit(req,'login','administrator',{});res.json({ok:true,csrf:req.session.csrf});
+  }));
+  app.post('/api/logout',guard,wrap(async(req,res)=>{await new Promise((resolve,reject)=>req.session.destroy(e=>e?reject(e):resolve()));res.clearCookie('levelup.sid');res.json({ok:true})}));
+  app.use('/api/admin',guard);
+  app.get('/api/admin/data',wrap(async(req,res)=>{
+    const [students,papers,marks,classes]=await Promise.all([
+      db.collection('students').find({},{projection:{accessCodeHash:0}}).sort({name:1}).toArray(),
+      db.collection('papers').find().sort({order:1,_id:1}).toArray(), db.collection('marks').find().toArray(),db.collection('classes').find().sort({name:1}).toArray()]);
+    res.json({students,papers,marks,classes});
+  }));
+  app.get('/api/admin/audit',wrap(async(req,res)=>res.json(await db.collection('auditLogs').find().sort({createdAt:-1}).limit(200).toArray())));
+  async function checkClass(classId){if(classId && !await db.collection('classes').findOne({_id:oid(classId)})) throw fail(400,'Unknown class')}
+  for (const method of ['post','patch']) {
+    const edit=method==='patch';
+    app[method]('/api/admin/classes'+(edit?'/:id':''),wrap(async(req,res)=>{
+      const data=z.object({name:text}).parse(req.body);const _id=edit?oid(req.params.id):new ObjectId();
+      if(edit && !await db.collection('classes').findOne({_id})) throw fail(404,'Class not found');
+      await db.collection('classes').updateOne({_id},{$set:data},{upsert:!edit});await audit(req,edit?'edit':'create','class',{id:_id,...data});res.json({id:_id});
+    }));
+    app[method]('/api/admin/students'+(edit?'/:id':''),wrap(async(req,res)=>{
+      const data=studentSchema.parse(req.body);await checkClass(data.classId);
+      const _id=edit?oid(req.params.id):new ObjectId();const before=edit?await db.collection('students').findOne({_id}):null;
+      if(edit&&!before) throw fail(404,'Student not found');
+      const {accessCode,...fields}=data;fields.nameKey=normalize(data.name);
+      if(accessCode){if(accessCode.length<8)throw fail(400,'Access codes require at least 8 characters');fields.accessCodeHash=await bcrypt.hash(accessCode,12)}
+      await db.collection('students').updateOne({_id},{$set:fields},{upsert:!edit});
+      await audit(req,edit?'edit':'create','student',{id:_id,...data,accessCode:accessCode?'[changed]':undefined});res.json({id:_id});
+    }));
+    app[method]('/api/admin/papers'+(edit?'/:id':''),wrap(async(req,res)=>{
+      const data=paperSchema.parse(req.body);await checkClass(data.classId);
+      const _id=edit?oid(req.params.id):new ObjectId();const before=edit?await db.collection('papers').findOne({_id}):null;
+      if(edit&&!before)throw fail(404,'Paper not found');
+      if(edit && await db.collection('marks').findOne({paperId:_id,value:{$gt:data.max}}))throw fail(400,'Maximum is below an existing mark');
+      const last=await db.collection('papers').find().sort({order:-1}).limit(1).next();
+      await db.collection('papers').updateOne({_id},{$set:{...data,order:before?.order??((last?.order??0)+1),updatedAt:new Date()}},{upsert:!edit});
+      await audit(req,edit?'edit':'create','paper',{id:_id,before,after:data});res.json({id:_id});
+    }));
+  }
+  app.put('/api/admin/paper-order',wrap(async(req,res)=>{
+    const ids=z.array(id).max(1000).parse(req.body.ids);const count=await db.collection('papers').countDocuments();
+    if(new Set(ids).size!==count || ids.length!==count || await db.collection('papers').countDocuments({_id:{$in:ids.map(oid)}})!==count)throw fail(400,'Provide every paper exactly once');
+    if(ids.length)await db.collection('papers').bulkWrite(ids.map((value,order)=>({updateOne:{filter:{_id:oid(value)},update:{$set:{order}}}})));
+    await audit(req,'reorder','papers',{ids});res.json({ok:true});
+  }));
+  app.put('/api/admin/marks',wrap(async(req,res)=>{
+    const entry=z.object({studentId:id,paperId:id,value:z.number().finite().min(0).nullable().optional(),status:z.enum(['present','absent']).default('present')});
+    const entries=z.array(entry).min(1).max(2000).parse(req.body.entries || [req.body]);
+    const seen=new Set();const prepared=[];
+    for(const e of entries){
+      const key=e.studentId+e.paperId;if(seen.has(key))throw fail(400,'Duplicate cell in batch');seen.add(key);
+      const [student,paper]=await Promise.all([db.collection('students').findOne({_id:oid(e.studentId),active:true}),db.collection('papers').findOne({_id:oid(e.paperId)})]);
+      if(!student||!paper)throw fail(400,'Unknown or inactive student or paper');
+      if(paper.classId && String(student.classId)!==String(paper.classId))throw fail(400,'Student does not belong to this paper class');
+      const value=e.status==='absent'?null:(e.value??null);
+      if(value!==null && (value>paper.max || Math.abs(Math.round(value*100)-value*100)>1e-7))throw fail(400,`Mark must be between 0 and ${paper.max}, with up to two decimals`);
+      const filter={studentId:student._id,paperId:paper._id};const before=await db.collection('marks').findOne(filter);
+      prepared.push({filter,before,after:{value,status:e.status,updatedAt:new Date(),updatedBy:req.session.admin}});
+    }
+    // Validate the entire batch before any write. Serialize deployments to one writer for strict cross-request ordering.
+    await db.collection('marks').bulkWrite(prepared.map(e=>({updateOne:{filter:e.filter,update:{$set:e.after},upsert:true}})),{ordered:true});
+    await audit(req,'marks','marks',prepared.map(e=>({studentId:e.filter.studentId,paperId:e.filter.paperId,before:e.before?{value:e.before.value,status:e.before.status}:null,after:e.after})));
+    res.json({ok:true,count:prepared.length});
+  }));
+  app.post('/api/lookup',limiter(25),wrap(async(req,res)=>{
+    const {name}=z.object({name:text.pipe(z.string().min(2))}).parse(req.body);const key=normalize(name);
+    const projection={name:1,label:1,classId:1};
+    let students=await db.collection('students').find({nameKey:key,active:true},{projection}).limit(30).toArray();const exact=students.length>0;
+    if(!exact){
+      const words=key.split(' ').filter(w=>w.length>1);
+      const escaped=words.slice(0,3).map(w=>w.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'));
+      if(escaped.length){const candidates=await db.collection('students').find({active:true,nameKey:{$regex:escaped.join('|')}},{projection}).limit(200).toArray();
+        students=candidates.map(s=>({...s,rank:words.filter(w=>normalize(s.name).includes(w)).length})).sort((a,b)=>b.rank-a.rank).slice(0,5);
+      }
+    }
+    const classes=await db.collection('classes').find().toArray();
+    res.json({exact,students:students.map(s=>({_id:s._id,name:s.name,label:s.label||classes.find(c=>String(c._id)===s.classId)?.name||'Ask your teacher for your profile label'}))});
+  }));
+  app.post('/api/student/access',limiter(15),wrap(async(req,res)=>{
+    const {studentId,code}=z.object({studentId:id,code:z.string().max(128)}).parse(req.body);
+    const student=await db.collection('students').findOne({_id:oid(studentId),active:true});
+    if(!student?.accessCodeHash || !await bcrypt.compare(code,student.accessCodeHash))throw fail(401,'Invalid profile or access code');
+    req.session.studentId=studentId;res.json({ok:true});
+  }));
+  app.get('/api/results/:id',limiter(120),wrap(async(req,res)=>{
+    const _id=oid(req.params.id);
+    if(accessMode==='code'&&req.session.studentId!==String(_id))throw fail(401,'Enter your student access code');
+    const student=await db.collection('students').findOne({_id,active:true});if(!student)throw fail(404,'Profile unavailable');
+    const papers=await db.collection('papers').find({state:'published',$or:[{classId:null},{classId:{$exists:false}},...(student.classId?[{classId:student.classId}]:[])]}).sort({order:1,_id:1}).toArray();
+    const marks=await db.collection('marks').find({studentId:_id,paperId:{$in:papers.map(p=>p._id)}}).toArray();
+    res.json({student:student.name,papers:papers.flatMap(p=>{const m=marks.find(m=>String(m.paperId)===String(p._id));return m&&m.status!=='absent'&&typeof m.value==='number'&&m.value>=0&&m.value<=p.max?[{id:p._id,name:p.name,subject:p.subject||'',date:p.date||'',max:p.max,value:m.value}]:[]})});
+  }));
+  app.use('/api',(_req,_res,next)=>next(fail(404,'API endpoint not found')));
+  app.use(express.static(new URL('./public',import.meta.url).pathname));
+  app.get(['/','/admin'],(_req,res)=>res.sendFile(new URL('./public/index.html',import.meta.url).pathname));
+  app.use((error,req,res,_next)=>{
+    const status=error instanceof z.ZodError?400:error.code===11000?409:error.status|| (error.type==='entity.parse.failed'?400:500);
+    if(status===500)console.error('Request failed:',error.message);
+    res.status(status).json({error:status===500?'Unexpected server error':error instanceof z.ZodError?'Invalid input: '+error.issues.map(i=>i.path.join('.')+' '+i.message).join('; '):error.code===11000?'This record already exists':error.message});
+  });
+  return app;
+}
+if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){
+  if(!process.env.MONGODB_URI)throw Error('Set MONGODB_URI');
+  const client=new MongoClient(process.env.MONGODB_URI);await client.connect();
+  const app=await createApp({client,db:client.db(process.env.MONGODB_DB||'levelup_results')});
+  const server=app.listen(process.env.PORT||3000,()=>console.log('LevelUp Results listening on '+(process.env.PORT||3000)));
+  for(const signal of ['SIGINT','SIGTERM'])process.on(signal,()=>server.close(async()=>{await client.close();process.exit(0)}));
+}
