@@ -1,10 +1,14 @@
 {
   "name": "levelup-results",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js"
+    "dev": "node --watch server.js",
+    "test": "node --test tests/api.test.js",
+    "test:e2e": "playwright test",
+    "admin:set": "node scripts/admin.js",
+    "format:check": "prettier --check server.js public tests scripts playwright.config.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -20,6 +24,10 @@
   "devDependencies": {
     "@playwright/test": "^1.65.0",
     "mongodb-memory-server": "^11.3.0",
+    "prettier": "^3.9.10",
     "supertest": "^7.3.2"
+  },
+  "engines": {
+    "node": ">=20.19"
   }
 }
