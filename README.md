@@ -30,7 +30,7 @@ Open `http://localhost:3000/` and `http://localhost:3000/#admin`. The frontend c
 
 ### Static deployment configuration
 
-`public/` is the complete deployable website, including a checked-in Supabase browser SDK. All asset URLs are relative, and navigation uses `#admin` for project-path compatibility. The Pages workflow copies **only** this directory into `dist/`, adds `.nojekyll`, and uploads it. It never includes the SQL migration, database export, tests, private `.env` or development server.
+`public/` is the complete deployable website, including a checked-in Supabase browser SDK. A root `index.html` also starts the same app when serving the repository root; GitHub Actions still deploys only `public/`. All asset URLs are relative, and navigation uses `#admin` for project-path compatibility. The Pages workflow copies **only** this directory into `dist/`, adds `.nojekyll`, and uploads it. It never includes the SQL migration, database export, tests, private `.env` or development server.
 
 Optional GitHub repository variables `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` override the checked-in public configuration when both are provided. `TURNSTILE_SITE_KEY` configures the optional public CAPTCHA site key. Secret/service-role keys are rejected by the browser validation and the deployment generator. To test artifact generation:
 
