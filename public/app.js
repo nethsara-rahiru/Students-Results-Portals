@@ -23,7 +23,7 @@ const brand =
   '<a class="brand" href="./" aria-label="LevelUp Results home"><span class="brand-mark"><svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><path d="M5 18 18 5M6 5h12v12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span> LevelUp<span class="brand-light">Results</span></a>';
 function shell(content, admin = false) {
   finishSpin = null;
-  app.innerHTML = `<header class="site-header">${brand}<span class="eyebrow">${admin ? "TEACHER WORKSPACE" : '<a class="teacher-link" href="#admin">Teacher sign in</a>'}</span></header>${content}<footer>LevelUp Results <span>Small steps. Meaningful progress.</span></footer>`;
+  app.innerHTML = `<header class="site-header">${brand}<span class="${admin ? "eyebrow" : "teacher-access"}">${admin ? "TEACHER WORKSPACE" : '<a class="teacher-link" href="#admin">Teacher sign in</a>'}</span></header>${content}<footer>LevelUp Results <span>Small steps. Meaningful progress.</span></footer>`;
   document.querySelector("main")?.setAttribute("tabindex", "-1");
   document.querySelector("main")?.focus({ preventScroll: true });
 }
@@ -401,7 +401,7 @@ async function admin() {
         area.querySelector(".management-list").append(row);
       }
     } else if (tab === "access") {
-      area.innerHTML = `<h2>Student access</h2><p class="muted">Name-only access is public-by-name. Choose access codes for confidential marks; roster suggestions remain visible.</p><form id="access-settings" class="stack"><label>Access mode<select name="mode"><option value="name" ${sessionInfo.accessMode === "name" ? "selected" : ""}>Name only — published marks are publicly accessible by name</option><option value="code" ${sessionInfo.accessMode === "code" ? "selected" : ""}>Student access code required</option></select></label><button>Save access mode</button><p id="settings-status" role="status"></p></form>`;
+      area.innerHTML = `<h2>Student access</h2><p class="muted">Name-only access is public-by-name. Choose access codes for confidential marks; roster suggestions remain visible.</p><form id="access-settings" class="stack"><label for="access-mode">Access mode</label><select id="access-mode" name="mode"><option value="name" ${sessionInfo.accessMode === "name" ? "selected" : ""}>Name only — published marks are publicly accessible by name</option><option value="code" ${sessionInfo.accessMode === "code" ? "selected" : ""}>Student access code required</option></select><button>Save access mode</button><p id="settings-status" role="status"></p></form>`;
       area.querySelector("form").onsubmit = async (e) => {
         e.preventDefault();
         try {

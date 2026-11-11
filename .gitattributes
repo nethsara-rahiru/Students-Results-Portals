@@ -1,0 +1,2 @@
+# Generated upstream JavaScript includes significant whitespace inside template strings.
+public/vendor/** -whitespace

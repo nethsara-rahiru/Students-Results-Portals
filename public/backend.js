@@ -37,16 +37,22 @@ async function captchaToken() {
     '<h2>A quick security check.</h2><p>Please complete the check to continue.</p><div id="captcha"></div>';
   document.body.append(dialog);
   dialog.showModal();
-  if (!window.turnstile)
-    await new Promise((resolve, reject) => {
-      const script = document.createElement("script");
-      script.src =
-        "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
-      script.onload = resolve;
-      script.onerror = () =>
-        reject(Error("Unable to load the security check. Please retry."));
-      document.head.append(script);
-    });
+  try {
+    if (!window.turnstile)
+      await new Promise((resolve, reject) => {
+        const script = document.createElement("script");
+        script.src =
+          "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+        script.onload = resolve;
+        script.onerror = () =>
+          reject(Error("Unable to load the security check. Please retry."));
+        document.head.append(script);
+      });
+  } catch (error) {
+    dialog.close();
+    dialog.remove();
+    throw error;
+  }
   return new Promise((resolve, reject) => {
     const close = () => {
       dialog.close();
