@@ -1,0 +1,26 @@
+{
+  "name": "levelup-results",
+  "version": "2.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "python3 -m http.server 3000 --directory public",
+    "test": "node --test tests/database.test.js",
+    "test:e2e": "playwright test",
+    "vendor:build": "esbuild scripts/vendor-entry.js --bundle --format=esm --platform=browser --minify --outfile=public/vendor/supabase.js",
+    "format:check": "prettier --check public/*.js public/*.css public/*.html tests scripts/*.js playwright.config.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.119.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.65.0",
+    "embedded-postgres": "^18.6.0-beta.19",
+    "esbuild": "^0.28.2",
+    "pg": "^8.23.1",
+    "prettier": "^3.9.10"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "description": "Static GitHub Pages student results portal backed by Supabase"
+}
