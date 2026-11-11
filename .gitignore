@@ -1,0 +1,12 @@
+node_modules/
+.env
+.env.*
+!.env.example
+test-results/
+playwright-report/
+coverage/
+*.log
+backups/
+
+# Private database credentials
+atlas-credentials.env
