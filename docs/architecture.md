@@ -1,7 +1,11 @@
-# Repository audit and architecture
+# Supabase / static architecture
 
-The existing branch contains an Express/MongoDB MVP and vanilla browser client. Its name normalization, stable ObjectIds, unique mark index, explicit publication, and single-paper reveal are retained. Missing persistent sessions, CSRF, complete validation, audit history, class management, spreadsheet batching and tests are addressed in this iteration.
+The original Express/MongoDB implementation is retained on the original development branch. This branch replaces its production backend while preserving the vanilla UI, native spreadsheet and animation modules. Only `public/` is deployed to GitHub Pages. Relative assets and `#admin` navigation work at a repository subpath without rewrite rules.
 
-The server exposes a factory for isolated integration testing. MongoDB holds students, classes, papers, marks, administrators, auditLogs and sessions. Administrative writes require both an authenticated session and a synchronizer CSRF token. Student result authorization is either explicitly public name-based access or a student-bound session established using an access code. Every result query filters published papers and a single student. Sheet edits validate complete batches before writing; audit records preserve prior/new values. Client formulas calculate only selections and never enter stored marks.
+`public/backend.js` adapts the existing UI actions to Supabase Auth and bounded PostgreSQL RPCs, using the locally bundled official SDK. Project URL/publishable key are public; no service-role or database credential is used by the browser. Student browsers obtain anonymous Auth sessions, while teachers sign in with email/password and must also exist in a private administrator allowlist.
 
-The browser uses a native input grid with range selection, clipboard TSV, undo/redo and keyboard navigation. A shared ordered paper list drives both spreadsheet and reveal. Blank, absent and numeric zero are distinct.
+The SQL migration is authoritative. Public data tables have RLS and no direct browser permissions. Security-definer entrypoints use fixed search paths; private helpers/code hashes/rate limits are not exposed. Student result RPCs read a single active profile's published, class-appropriate numeric marks. Optional eight-hour access-code grants bind Auth UID to one student profile. Name mode intentionally permits published results by name.
+
+SQL transactions serialize administrative edits; marks and audit triggers commit/roll back atomically. Server-side constraints validate all data, including pastes. This improves on the previous non-transactional MongoDB batch/audit path. Concurrent valid changes remain last-write-wins.
+
+Development tools start isolated native PostgreSQL. Tests provide Auth claims/roles and a test-only HTTP Auth/PostgREST transport; that transport is never deployed. Hosted Supabase configuration must be checked separately. The optional Python converter imports legacy MongoDB JSON while preserving text IDs; the database is never contacted automatically.
