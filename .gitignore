@@ -7,3 +7,6 @@ playwright-report/
 coverage/
 *.log
 backups/
+
+# Private database credentials
+atlas-credentials.env
