@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 async function identify(page, name) {
-  await page.goto("/");
+  await page.goto("./");
   await page.getByLabel("Full name", { exact: true }).fill(name);
   await page.getByRole("button", { name: "Find my profile" }).click();
   await page.getByRole("button", { name: new RegExp(name + " ·") }).click();
@@ -11,9 +11,9 @@ test("no suggestions before submission, multi-paper reveal and final celebration
 }) => {
   let lookups = 0;
   page.on("request", (r) => {
-    if (r.url().endsWith("/api/lookup")) lookups++;
+    if (r.url().endsWith("/rpc/levelup_lookup")) lookups++;
   });
-  await page.goto("/");
+  await page.goto("./");
   await page.getByLabel("Full name", { exact: true }).fill("Maya Fernando");
   await page.waitForTimeout(150);
   expect(lookups).toBe(0);
@@ -73,7 +73,7 @@ test("single paper zero reveal honors reduced motion and replay", async ({
 });
 test("mobile layout and keyboard profile selection", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/");
+  await page.goto("./");
   await page.getByLabel("Full name", { exact: true }).focus();
   await page.keyboard.type("Maya Fernando");
   await page.keyboard.press("Enter");
@@ -95,8 +95,10 @@ test("mobile layout and keyboard profile selection", async ({ page }) => {
 test("teacher spreadsheet: navigation, paste, validation, fill, undo, search and management", async ({
   page,
 }) => {
-  await page.goto("/admin");
-  await page.getByLabel("Username", { exact: true }).fill("teacher");
+  await page.goto("./#admin");
+  await page
+    .getByLabel("Teacher email", { exact: true })
+    .fill("teacher@example.test");
   await page.getByLabel("Password", { exact: true }).fill("browser-password");
   await page.getByRole("button", { name: "Sign in" }).click();
   const cells = page.locator("td input");
@@ -151,8 +153,10 @@ test("teacher spreadsheet: navigation, paste, validation, fill, undo, search and
 });
 test("teacher mobile workspace remains within viewport", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/admin");
-  await page.getByLabel("Username", { exact: true }).fill("teacher");
+  await page.goto("./#admin");
+  await page
+    .getByLabel("Teacher email", { exact: true })
+    .fill("teacher@example.test");
   await page.getByLabel("Password", { exact: true }).fill("browser-password");
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page.locator(".sheet")).toBeVisible();

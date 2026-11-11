@@ -779,3 +779,10 @@ dialog h2 {
   text-shadow: none;
   filter: drop-shadow(0 0 35px #e5c46c55);
 }
+.teacher-link {
+  color: #c0b4ff;
+  text-decoration: none;
+}
+.teacher-link:hover {
+  text-decoration: underline;
+}
