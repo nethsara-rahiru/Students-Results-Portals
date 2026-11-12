@@ -10,8 +10,8 @@ backups/
 
 # Private database credentials
 atlas-credentials.env
+# Generated output from the previous static edition
 dist/
 .postgres/
 __pycache__/
-*.sql.gz
 mongo-export/

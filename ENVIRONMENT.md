@@ -1,11 +1,15 @@
-# Static application configuration
+# MongoDB application configuration
 
-LevelUp Results now uses GitHub Pages and Supabase. There is no Node server or MongoDB connection in the deployed site.
+The active application uses Node.js, Express and MongoDB again. The Supabase edition remains in Git history and on `feat/supabase-github-pages`; no Supabase project or data is deleted by this change.
 
-- `public/config.js` contains the browser-safe Supabase project URL and publishable key.
-- `.env.example` documents optional public inputs for the static artifact generator. GitHub Pages does not read a runtime `.env`.
-- `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` GitHub repository variables can override both public settings during deployment.
-- `TURNSTILE_SITE_KEY` is optional for CAPTCHA. Its secret must remain in Supabase Auth settings, never browser code.
-- Never publish a database password, `sb_secret_` key or service-role key. Previously uploaded MongoDB credentials should be rotated; removing a file does not remove its history.
+1. Copy `.env.example` to `.env` on the application server.
+2. Set `MONGODB_URI` and `MONGODB_DB` for your MongoDB database.
+3. Set `SESSION_SECRET` to a new random value from `openssl rand -hex 32`.
+4. Run `npm ci`, then `npm run admin:set` to create/reset the administrator securely.
+5. Run `npm start`; students use `/` and teachers use `/admin`.
 
-Complete [Supabase setup](docs/supabase-setup.md), including anonymous sign-ins, the SQL migration and teacher allowlist. Then use the GitHub Actions Pages deployment workflow. See [README](README.md) for no-Node local serving, deployment, testing and migration instructions.
+Keep `.env` private and uncommitted. Previously uploaded database credentials must be rotated before reuse. `ADMIN_PASSWORD_HASH` is an optional first-run bootstrap hash, not a plaintext password. Choose `STUDENT_ACCESS_MODE=code` when published marks require confidential access.
+
+For production use an HTTPS Node host/VPS and an authenticated private MongoDB connection. GitHub Pages cannot run this backend; the static Supabase Pages workflow has been removed. An existing Pages deployment is not a deployment of this restored application. See README for setup, tests, Nginx/systemd configuration, backups and limitations.
+
+Existing MongoDB records are not rewritten by this code restoration. Any results entered in Supabase since switching are not automatically copied back; export/reconcile them separately before accepting live writes in MongoDB.

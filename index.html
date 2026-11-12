@@ -3,21 +3,28 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <meta name="theme-color" content="#101322" />
-    <meta
-      name="description"
-      content="Discover your progress with LevelUp Results."
-    />
-    <meta
-      http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; connect-src 'self' https://*.supabase.co wss://*.supabase.co; frame-src https://challenges.cloudflare.com; img-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'"
-    />
-    <meta name="referrer" content="no-referrer" />
-    <title>LevelUp Results</title>
-    <link rel="stylesheet" href="./public/style.css" />
+    <title>LevelUp Results — Start the application</title>
   </head>
   <body>
-    <div id="app" aria-live="off"><p>Loading LevelUp Results…</p></div>
-    <script type="module" src="./public/app.js"></script>
+    <main>
+      <h1>LevelUp Results</h1>
+      <p>
+        This version uses a Node.js server and MongoDB. GitHub Pages cannot run
+        its backend.
+      </p>
+      <p>
+        Configure your private <code>.env</code>, run <code>npm ci</code>, then
+        <code>npm run admin:set</code> and <code>npm start</code>.
+      </p>
+      <p>
+        Open <a href="http://localhost:3000/">the local application</a>, or use
+        your deployed Node server URL.
+      </p>
+      <p>
+        The application entry page is <code>public/index.html</code>, served by
+        Express. Opening that file directly will not connect the backend.
+      </p>
+      <p><a href="./README.md">Installation and deployment instructions</a></p>
+    </main>
   </body>
 </html>

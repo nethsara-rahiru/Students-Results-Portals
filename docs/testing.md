@@ -1,21 +1,20 @@
-# Supabase delivery verification
+# Delivery verification
 
-Testing uses Node 24, Python 3, an isolated native PostgreSQL 18 instance and Chromium. Production has no Node runtime. Test records are synthetic and never written to the configured Supabase project.
+Revalidated for the MongoDB restoration with Node 24.22.1, an isolated MongoDB process (`mongodb-memory-server`), and Playwright Chromium 158. Tests use synthetic records and do not connect to the production database.
 
-| Check | Scope |
+| Check | Result |
 | --- | --- |
-| `npm test` | **15 passed** — PostgreSQL migration/RPC security, validation and import tests |
-| `npm run test:e2e` | **8 passed** — static project-path UI with the bundled Supabase SDK and real local SQL functions |
-| `npm run format:check` | Passed — first-party JavaScript/CSS/HTML formatting |
-| `npm audit` | 0 reported vulnerabilities across all development/tooling dependencies |
-| `python3 scripts/prepare-pages.py` | Passed — static-only deployment artifact, no runtime server/credentials |
+| `npm test` | 14 API integration tests passed |
+| `npm run test:e2e` | 5 Chromium tests passed |
+| `npm run format:check` | Passed |
+| `npm audit --omit=dev` | 0 reported vulnerabilities |
 
-The database suite verifies configuration rejects privileged browser keys; anon/student/regular accounts cannot access teacher RPCs or raw tables; allowlist revocation takes effect immediately; exact and typo lookup are bounded; duplicate names use stable IDs/labels; paper validation and ordering work; invalid batches roll back ALL marks and audit entries; zero, decimals, blanks and absence remain distinct; publishing/unpublishing and classes limit student results; access-code grants bind to user/profile and are revoked on reset; null/invalid codes fail; failed code guesses still count toward rate limits; lookup limits persist; legacy MongoDB IDs and safely escaped JSON imports work; security-definer functions have fixed paths and no PUBLIC/anon execution.
+API coverage: unauthorized access, synchronizer CSRF, wrong/correct login, token rotation, secure session attributes, classes and student creation, duplicate normalized names with distinct labels, post-submission similarity suggestions, draft creation and column ordering, complete-batch validation, formula rejection, decimal marks, blank/zero/absence, audit entries, publish/unpublish, per-student results, paper reorder, optional student codes, deactivation, class isolation, maximum/date validation, database validators, Mongo session persistence, logout, lookup rate limiting, and preservation of original MVP IDs/published results during migration.
 
-Browser coverage includes no lookup while typing; confirmation and remembered profile; two-paper ordered reveal, exact spinner completion, normalized comparison, final achievement/confetti and summary; a single zero mark, replay and reduced motion; keyboard selection and mobile student layout; teacher email/password sign-in; grid navigation, TSV paste, undo/redo, range fill, invalid edit restoration, search, student/paper creation; mobile teacher layout and Tab exiting the grid; wrong credentials; missing configuration feedback; and teacher-controlled code mode with wrong/correct student codes.
+Browser coverage: no lookup requests while typing; profile confirmation; remembered profile; full ordered two-paper journey; spinner settling exactly on actual marks; percentage normalization; final achievement/confetti; summary; single-paper zero result; replay; reduced motion; keyboard profile selection; 390px mobile student layout; teacher sign-in; Tab navigation; multi-cell TSV paste; undo/redo; range fill; invalid edit restoration; student filtering; student and paper creation; mobile admin layout; Tab leaving the final spreadsheet cell.
 
-A test-fixture startup issue from stale shared Unix socket locks was fixed by assigning each temporary PostgreSQL cluster its own socket directory. The SQL access-code function was explicitly tested to reject NULL codes; failed guesses return a value so their rate-limit writes commit instead of rolling back with an exception.
+Visual review: desktop welcome, teacher spreadsheet, final result and mobile welcome were captured in `docs/screenshots`. Unsupported arrow glyphs were replaced with SVG; clipping of score glow and grid keyboard exit were corrected. A migration test exposed asynchronous session index initialization at shutdown; startup now waits for store readiness. Browser tests exposed that re-entering a restored value does not emit a native change event; recovery verification uses a changed valid value.
 
-The local Auth/PostgREST transport is a test harness, not proof that hosted Supabase Auth has been configured. Live public settings initially confirmed email/password enabled and anonymous sign-ins disabled. Hosted schema/teacher-account setup must be completed and verified separately before publishing. CAPTCHA requires external provider setup and was not solved automatically in tests. No live MongoDB data migration, hosted backup restoration, load test, independent penetration test or formal accessibility certification is claimed.
+Limits: Chromium mobile tests emulate viewport size, not physical devices. No independent penetration test, screen-reader certification, production load test, production database migration, live TLS deployment or disaster-recovery restore was performed. Multi-cell persistence and audit inserts are not one MongoDB transaction; concurrent teacher editing has no conflict resolution. See README known limitations before operating a confidential or large deployment.
 
-Screenshots in `docs/screenshots/` show synthetic students and the current static application. CI runs PostgreSQL/browser/format checks on push and pull request. The Pages deployment workflow is separate and only deploys main or a manually selected revision after GitHub Pages is enabled.
+GitHub Actions runs the integration/browser/format checks on push and pull request. Its remote run must be inspected separately; local passing tests do not establish that CI has finished.
