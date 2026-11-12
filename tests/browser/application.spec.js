@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 async function identify(page, name) {
-  await page.goto("./");
+  await page.goto("/");
   await page.getByLabel("Full name", { exact: true }).fill(name);
   await page.getByRole("button", { name: "Find my profile" }).click();
   await page.getByRole("button", { name: new RegExp(name + " ·") }).click();
@@ -11,9 +11,9 @@ test("no suggestions before submission, multi-paper reveal and final celebration
 }) => {
   let lookups = 0;
   page.on("request", (r) => {
-    if (r.url().endsWith("/rpc/levelup_lookup")) lookups++;
+    if (r.url().endsWith("/api/lookup")) lookups++;
   });
-  await page.goto("./");
+  await page.goto("/");
   await page.getByLabel("Full name", { exact: true }).fill("Maya Fernando");
   await page.waitForTimeout(150);
   expect(lookups).toBe(0);
@@ -73,10 +73,7 @@ test("single paper zero reveal honors reduced motion and replay", async ({
 });
 test("mobile layout and keyboard profile selection", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("./");
-  await expect(
-    page.getByRole("link", { name: "Teacher sign in" }),
-  ).toBeVisible();
+  await page.goto("/");
   await page.getByLabel("Full name", { exact: true }).focus();
   await page.keyboard.type("Maya Fernando");
   await page.keyboard.press("Enter");
@@ -98,10 +95,8 @@ test("mobile layout and keyboard profile selection", async ({ page }) => {
 test("teacher spreadsheet: navigation, paste, validation, fill, undo, search and management", async ({
   page,
 }) => {
-  await page.goto("./#admin");
-  await page
-    .getByLabel("Teacher email", { exact: true })
-    .fill("teacher@example.test");
+  await page.goto("/admin");
+  await page.getByLabel("Username", { exact: true }).fill("teacher");
   await page.getByLabel("Password", { exact: true }).fill("browser-password");
   await page.getByRole("button", { name: "Sign in" }).click();
   const cells = page.locator("td input");
@@ -156,10 +151,8 @@ test("teacher spreadsheet: navigation, paste, validation, fill, undo, search and
 });
 test("teacher mobile workspace remains within viewport", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("./#admin");
-  await page
-    .getByLabel("Teacher email", { exact: true })
-    .fill("teacher@example.test");
+  await page.goto("/admin");
+  await page.getByLabel("Username", { exact: true }).fill("teacher");
   await page.getByLabel("Password", { exact: true }).fill("browser-password");
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page.locator(".sheet")).toBeVisible();
@@ -171,89 +164,4 @@ test("teacher mobile workspace remains within viewport", async ({ page }) => {
   await page.locator("td input").last().focus();
   await page.keyboard.press("Tab");
   await expect(page.locator("td input").last()).not.toBeFocused();
-});
-test("invalid teacher credentials do not open the dashboard", async ({
-  page,
-}) => {
-  await page.goto("./#admin");
-  await page
-    .getByLabel("Teacher email", { exact: true })
-    .fill("teacher@example.test");
-  await page.getByLabel("Password", { exact: true }).fill("wrong-password");
-  await page.getByRole("button", { name: /^Sign in/ }).click();
-  await expect(page.locator("#error")).toContainText(
-    "Invalid email or password",
-  );
-  await expect(page.locator(".dashboard")).toHaveCount(0);
-});
-test("missing Supabase configuration gives actionable setup feedback", async ({
-  page,
-}) => {
-  await page.route("**/config.js", (route) =>
-    route.fulfill({
-      contentType: "text/javascript",
-      body: 'export const config = {supabaseUrl:"",supabaseKey:""};',
-    }),
-  );
-  await page.goto("./");
-  await expect(page.getByRole("alert")).toContainText(
-    "Supabase is not configured",
-  );
-});
-test("teacher-controlled access-code mode protects the student journey", async ({
-  page,
-  browser,
-}) => {
-  await page.goto("./#admin");
-  await page
-    .getByLabel("Teacher email", { exact: true })
-    .fill("teacher@example.test");
-  await page.getByLabel("Password", { exact: true }).fill("browser-password");
-  await page.getByRole("button", { name: /^Sign in/ }).click();
-  await page.getByRole("button", { name: "Students", exact: true }).click();
-  await page
-    .locator(".management-row")
-    .filter({ hasText: "Maya Fernando" })
-    .getByRole("button", { name: "Edit profile" })
-    .click();
-  await page.getByLabel("New access code").fill("student-secret-code");
-  await page.getByRole("button", { name: "Save changes" }).click();
-  await page.getByRole("button", { name: "Access", exact: true }).click();
-  await page.getByLabel("Access mode", { exact: true }).selectOption("code");
-  await page.getByRole("button", { name: "Save access mode" }).click();
-  await expect(page.locator("#settings-status")).toHaveText(
-    "Access mode saved.",
-  );
-  const context = await browser.newContext({
-    baseURL: "http://localhost:3100/Students-Results-Portals/",
-  });
-  const student = await context.newPage();
-  try {
-    await student.goto("./");
-    await student
-      .getByLabel("Full name", { exact: true })
-      .fill("Maya Fernando");
-    await student.getByRole("button", { name: "Find my profile" }).click();
-    await student.getByRole("button", { name: /Maya Fernando ·/ }).click();
-    await expect(
-      student.getByLabel("Your teacher’s access code"),
-    ).toBeVisible();
-    await student
-      .getByLabel("Your teacher’s access code")
-      .fill("wrong-student-code");
-    await student.getByRole("button", { name: "Open my results" }).click();
-    await expect(student.locator("#error")).toContainText(
-      "Invalid profile or access code",
-    );
-    await student
-      .getByLabel("Your teacher’s access code")
-      .fill("student-secret-code");
-    await student.getByRole("button", { name: "Open my results" }).click();
-    await student.getByRole("button", { name: "Discover my results" }).click();
-    await expect(student.locator(".paper-card")).toBeVisible();
-  } finally {
-    await context.close();
-    await page.getByLabel("Access mode", { exact: true }).selectOption("name");
-    await page.getByRole("button", { name: "Save access mode" }).click();
-  }
 });

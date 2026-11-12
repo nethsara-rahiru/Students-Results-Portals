@@ -1,4 +1,3 @@
-import { api } from "./backend.js";
 import { mountSheet } from "./sheet.js";
 import { animateScore, motivation, celebrate } from "./reveal.js";
 const app = document.querySelector("#app");
@@ -12,6 +11,23 @@ const esc = (s) =>
   );
 let sessionInfo, studentProfile, finishSpin, sheet;
 const reduced = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+async function api(url, body, method = body ? "POST" : "GET") {
+  const response = await fetch("/api" + url, {
+    method,
+    headers: {
+      "Content-Type": "application/json",
+      "X-CSRF-Token": sessionInfo?.csrf || "",
+    },
+    ...(body ? { body: JSON.stringify(body) } : {}),
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    const error = new Error(data.error || "Request failed");
+    error.status = response.status;
+    throw error;
+  }
+  return data;
+}
 const btn = (label, action, className = "") => {
   const b = document.createElement("button");
   b.textContent = label;
@@ -20,10 +36,10 @@ const btn = (label, action, className = "") => {
   return b;
 };
 const brand =
-  '<a class="brand" href="./" aria-label="LevelUp Results home"><span class="brand-mark"><svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><path d="M5 18 18 5M6 5h12v12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span> LevelUp<span class="brand-light">Results</span></a>';
+  '<a class="brand" href="/" aria-label="LevelUp Results home"><span class="brand-mark"><svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><path d="M5 18 18 5M6 5h12v12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span> LevelUp<span class="brand-light">Results</span></a>';
 function shell(content, admin = false) {
   finishSpin = null;
-  app.innerHTML = `<header class="site-header">${brand}<span class="${admin ? "eyebrow" : "teacher-access"}">${admin ? "TEACHER WORKSPACE" : '<a class="teacher-link" href="#admin">Teacher sign in</a>'}</span></header>${content}<footer>LevelUp Results <span>Small steps. Meaningful progress.</span></footer>`;
+  app.innerHTML = `<header class="site-header">${brand}<span class="eyebrow">${admin ? "TEACHER WORKSPACE" : "YOUR NEXT CHAPTER"}</span></header>${content}<footer>LevelUp Results <span>Small steps. Meaningful progress.</span></footer>`;
   document.querySelector("main")?.setAttribute("tabindex", "-1");
   document.querySelector("main")?.focus({ preventScroll: true });
 }
@@ -146,7 +162,7 @@ function summary(data) {
 }
 function login() {
   shell(
-    `<main class="center"><form id="login" class="panel stack"><p class="eyebrow">TEACHER WORKSPACE</p><h1>Welcome back.</h1><p class="muted">A clear view of every student’s progress.</p><label for="username">Teacher email</label><input id="username" name="username" type="email" autocomplete="username" required><label for="password">Password</label><input id="password" name="password" type="password" autocomplete="current-password" required><button>Sign in →</button><p id="error" role="alert"></p></form></main>`,
+    `<main class="center"><form id="login" class="panel stack"><p class="eyebrow">TEACHER WORKSPACE</p><h1>Welcome back.</h1><p class="muted">A clear view of every student’s progress.</p><label for="username">Username</label><input id="username" name="username" autocomplete="username" required><label for="password">Password</label><input id="password" name="password" type="password" autocomplete="current-password" required><button>Sign in →</button><p id="error" role="alert"></p></form></main>`,
     true,
   );
   document.querySelector("#login").onsubmit = async (e) => {
@@ -156,7 +172,7 @@ function login() {
         username: e.target.elements.username.value,
         password: e.target.elements.password.value,
       });
-
+      sessionInfo.csrf = result.csrf;
       sessionInfo.admin = true;
       admin();
     } catch (e) {
@@ -201,7 +217,7 @@ async function admin() {
   const data = await api("/admin/data");
   let tab = "marks";
   shell(
-    `<main class="dashboard"><div class="top dashboard-title"><div><p class="eyebrow">TEACHER WORKSPACE</p><h1>A little clarity.<br><span>A lot of progress.</span></h1></div><button class="secondary" id="logout">Sign out</button></div><div class="stats"><article><span>Active students</span><strong>${data.students.filter((s) => s.active).length}</strong></article><article><span>Papers</span><strong>${data.papers.length}</strong></article><article><span>Published</span><strong>${data.papers.filter((p) => p.state === "published").length}</strong></article><article><span>Classes</span><strong>${data.classes.length}</strong></article></div><nav class="tabs" aria-label="Workspace sections">${["marks", "students", "papers", "classes", "performance", "history", "access"].map((t) => `<button data-tab="${t}" class="secondary">${t[0].toUpperCase() + t.slice(1)}</button>`).join("")}</nav><section class="panel workspace"><div id="workspace"></div></section></main>`,
+    `<main class="dashboard"><div class="top dashboard-title"><div><p class="eyebrow">TEACHER WORKSPACE</p><h1>A little clarity.<br><span>A lot of progress.</span></h1></div><button class="secondary" id="logout">Sign out</button></div><div class="stats"><article><span>Active students</span><strong>${data.students.filter((s) => s.active).length}</strong></article><article><span>Papers</span><strong>${data.papers.length}</strong></article><article><span>Published</span><strong>${data.papers.filter((p) => p.state === "published").length}</strong></article><article><span>Classes</span><strong>${data.classes.length}</strong></article></div><nav class="tabs" aria-label="Workspace sections">${["marks", "students", "papers", "classes", "performance", "history"].map((t) => `<button data-tab="${t}" class="secondary">${t[0].toUpperCase() + t.slice(1)}</button>`).join("")}</nav><section class="panel workspace"><div id="workspace"></div></section></main>`,
     true,
   );
   document.querySelector("#logout").onclick = async () => {
@@ -400,20 +416,6 @@ async function admin() {
         row.innerHTML = `<strong>${esc(s.name)}</strong><span>${results.length} results · ${results.length ? (results.reduce((a, b) => a + b, 0) / results.length).toFixed(1) + "% average" : "No entered marks"}</span>`;
         area.querySelector(".management-list").append(row);
       }
-    } else if (tab === "access") {
-      area.innerHTML = `<h2>Student access</h2><p class="muted">Name-only access is public-by-name. Choose access codes for confidential marks; roster suggestions remain visible.</p><form id="access-settings" class="stack"><label for="access-mode">Access mode</label><select id="access-mode" name="mode"><option value="name" ${sessionInfo.accessMode === "name" ? "selected" : ""}>Name only — published marks are publicly accessible by name</option><option value="code" ${sessionInfo.accessMode === "code" ? "selected" : ""}>Student access code required</option></select><button>Save access mode</button><p id="settings-status" role="status"></p></form>`;
-      area.querySelector("form").onsubmit = async (e) => {
-        e.preventDefault();
-        try {
-          const mode = e.target.elements.mode.value;
-          await api("/admin/settings", { mode });
-          sessionInfo.accessMode = mode;
-          area.querySelector("#settings-status").textContent =
-            "Access mode saved.";
-        } catch (error) {
-          area.querySelector("#settings-status").textContent = error.message;
-        }
-      };
     } else {
       area.innerHTML =
         '<h2>Change history</h2><p class="muted">Latest 200 events. Marks include the previous and new value.</p><div id="audit" class="audit-list">Loading…</div>';
@@ -447,7 +449,7 @@ window.addEventListener("unhandledrejection", (e) => {
 });
 try {
   sessionInfo = await api("/session");
-  if (location.hash === "#admin") {
+  if (location.pathname === "/admin") {
     await admin();
   } else {
     let s;
@@ -456,17 +458,10 @@ try {
     } catch {
       localStorage.removeItem("levelup.student");
     }
-    if (
-      s?._id &&
-      /^([a-f\d]{24}|[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12})$/i.test(
-        s._id,
-      )
-    )
-      welcome(s);
+    if (s?._id && /^[a-f\d]{24}$/i.test(s._id)) welcome(s);
     else home();
   }
 } catch (e) {
-  app.innerHTML = `<main class="center"><section class="panel stack"><h1>Let’s get connected.</h1><p role="alert">${esc(e.message)}</p><p>Check your Supabase configuration and project setup, then refresh.</p><a href="./#admin">Teacher sign in</a></section></main>`;
+  app.innerHTML =
+    '<main class="center"><h1>We couldn’t connect.</h1><p>Please refresh the page to try again.</p></main>';
 }
-
-window.addEventListener("hashchange", () => location.reload());

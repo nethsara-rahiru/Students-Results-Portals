@@ -1,0 +1,22 @@
+[Unit]
+Description=LevelUp Results
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=levelup
+Group=levelup
+WorkingDirectory=/opt/levelup
+EnvironmentFile=/opt/levelup/.env
+ExecStart=/usr/bin/node /opt/levelup/server.js
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target
