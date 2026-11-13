@@ -5,6 +5,8 @@ export function mountSheet(host, { students, papers, marks, save, onStatus }) {
     undo = [],
     redo = [],
     busy = false;
+  let idlePromise = Promise.resolve(true);
+  let resolveIdle;
   const values = new Map(
     marks.map((m) => [
       m.studentId + ":" + m.paperId,
@@ -114,6 +116,10 @@ export function mountSheet(host, { students, papers, marks, save, onStatus }) {
   async function apply(changes) {
     if (busy) throw Error("Wait for the current save");
     busy = true;
+    let succeeded = false;
+    idlePromise = new Promise((resolve) => {
+      resolveIdle = resolve;
+    });
     for (const row of inputs) for (const input of row) input.readOnly = true;
     onStatus("Saving…");
     try {
@@ -129,10 +135,12 @@ export function mountSheet(host, { students, papers, marks, save, onStatus }) {
         values.set(key(r, c), next);
         inputs[r][c].value = next;
       }
+      succeeded = true;
       onStatus("All changes saved");
       paint();
     } finally {
       busy = false;
+      resolveIdle(succeeded);
       for (const row of inputs) for (const input of row) input.readOnly = false;
     }
   }
@@ -290,5 +298,15 @@ export function mountSheet(host, { students, papers, marks, save, onStatus }) {
     undo: () => history(undo, redo, true),
     redo: () => history(redo, undo, false),
     isBusy: () => busy,
+    whenIdle: () => idlePromise,
+    hasUnsavedChanges: () =>
+      busy ||
+      inputs.some((row, r) =>
+        row.some(
+          (input, c) =>
+            !input.disabled &&
+            input.value !== String(values.get(key(r, c)) ?? ""),
+        ),
+      ),
   };
 }

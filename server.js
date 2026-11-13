@@ -662,8 +662,44 @@ export async function createApp({ db, client, config = {} }) {
   app.use("/api", (_req, _res, next) =>
     next(fail(404, "API endpoint not found")),
   );
+  const adminPages = new Set([
+    "marks",
+    "students",
+    "papers",
+    "classes",
+    "performance",
+    "history",
+  ]);
+  const adminPagePaths = new Set(
+    [...adminPages].map((page) => "/admin/" + page),
+  );
+  app.get("/admin", (_req, res) =>
+    res.set("Cache-Control", "no-store").redirect("/admin/marks"),
+  );
+  app.get("/admin/:page", (req, res) => {
+    res.set("Cache-Control", "no-store");
+    const page = req.params.page;
+    if (page === "login") {
+      if (req.session.admin) {
+        const next = adminPagePaths.has(req.query.next)
+          ? req.query.next
+          : "/admin/marks";
+        return res.redirect(next);
+      }
+    } else {
+      if (!adminPages.has(page))
+        return res.status(404).type("text").send("Admin page not found");
+      if (!req.session.admin)
+        return res.redirect(
+          "/admin/login?next=" + encodeURIComponent("/admin/" + page),
+        );
+    }
+    return res.sendFile(
+      new URL("./views/admin/" + page + ".html", import.meta.url).pathname,
+    );
+  });
   app.use(express.static(new URL("./public", import.meta.url).pathname));
-  app.get(["/", "/admin"], (_req, res) =>
+  app.get("/", (_req, res) =>
     res.sendFile(new URL("./public/index.html", import.meta.url).pathname),
   );
   app.use((error, req, res, _next) => {

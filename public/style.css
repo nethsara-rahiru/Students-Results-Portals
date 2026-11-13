@@ -5,14 +5,25 @@
   font-synthesis: none;
   --muted: #a7afc8;
   --line: #30364f;
-  --gradient: linear-gradient(115deg, #768cf9, #9577f8);
+  --primary-start: #159ed4;
+  --primary-end: #9d59eb;
+  --on-primary: #080b18;
+  --accent-soft: #85d0ed;
+  --violet-soft: #c7a0f4;
+  --primary-glow: #159ed444;
+  --primary-faint: #159ed41a;
+  --violet-tint: #9d59eb2b;
+  --score-glow: #159ed455;
+  --gradient: linear-gradient(115deg, var(--primary-start), var(--primary-end));
 }
 * {
   box-sizing: border-box;
 }
 body {
   margin: 0;
-  background: radial-gradient(ellipse at 10% 30%, #28244866, transparent 60%);
+  background:
+    radial-gradient(ellipse at 10% 30%, #159ed419, transparent 60%),
+    radial-gradient(ellipse at 90% 70%, #9d59eb1a, transparent 60%);
 }
 button,
 input,
@@ -30,7 +41,7 @@ button {
   border-radius: 10px;
   padding: 13px 21px;
   background: var(--gradient);
-  color: #fff;
+  color: var(--on-primary);
   font-weight: 700;
   cursor: pointer;
   transition:
@@ -50,7 +61,7 @@ a:focus-visible,
 input:focus-visible,
 select:focus-visible,
 summary:focus-visible {
-  outline: 3px solid #c2b5ff;
+  outline: 3px solid var(--accent-soft);
   outline-offset: 3px;
 }
 input,
@@ -86,7 +97,7 @@ h1 {
   margin: 14px 0 24px;
 }
 h1 span {
-  color: #a99dfd;
+  color: var(--violet-soft);
 }
 h2 {
   font-size: 1.8rem;
@@ -167,6 +178,7 @@ main:focus {
   margin: 24px 0 0;
 }
 .profile-card {
+  color: #e9ecf8;
   background: #303653;
   text-align: left;
   white-space: normal;
@@ -195,7 +207,7 @@ main:focus {
 .orb {
   margin: auto auto 30px;
   background: var(--gradient);
-  box-shadow: 0 0 80px #9577f844;
+  box-shadow: 0 0 80px var(--primary-glow);
   width: 90px;
   height: 90px;
   border-radius: 25px;
@@ -205,6 +217,7 @@ main:focus {
   margin: 20px;
 }
 .paper-card {
+  color: #e9ecf8;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -212,22 +225,22 @@ main:focus {
   min-width: min(600px, 90vw);
   max-width: 850px;
   padding: 50px 35px;
-  background: linear-gradient(140deg, #303552, #211d38);
-  border: 1px solid #8477c1;
-  box-shadow: 0 30px 100px #9577f81a;
+  background: linear-gradient(140deg, #173b50, #2e2045);
+  border: 1px solid var(--primary-start);
+  box-shadow: 0 30px 100px var(--primary-faint);
 }
 .paper-card h1 {
   margin: 0;
 }
 .paper-card small {
   letter-spacing: 2px;
-  color: #c0b6e6;
+  color: var(--accent-soft);
 }
 .paper-card strong {
   margin-top: 15px;
 }
 .paper-symbol {
-  color: #d6c3ff;
+  color: var(--violet-soft);
   font-size: 64px;
 }
 .reveal {
@@ -241,10 +254,10 @@ main:focus {
   justify-content: center;
   text-align: center;
   padding: 45px 24px;
-  background: radial-gradient(ellipse, #3d3d7133, transparent 65%);
+  background: radial-gradient(ellipse, #159ed433, transparent 65%);
 }
 .reveal.final {
-  background: radial-gradient(ellipse, #68578055, transparent 65%);
+  background: radial-gradient(ellipse, #9d59eb33, transparent 65%);
 }
 .reveal h1 {
   font-size: clamp(2rem, 4vw, 3.4rem);
@@ -258,8 +271,8 @@ main:focus {
   font-family: Manrope, system-ui, sans-serif;
   letter-spacing: -0.04em;
   line-height: 1;
-  color: #d8d6ff;
-  text-shadow: 0 0 65px #9d8cef66;
+  color: var(--accent-soft);
+  text-shadow: 0 0 65px var(--score-glow);
   margin: 20px 0;
 }
 .final .score {
@@ -320,8 +333,8 @@ main:focus {
   background: #4d516b;
 }
 .dot.on {
-  background: #b09afd;
-  box-shadow: 0 0 14px #9577f8;
+  background: var(--primary-start);
+  box-shadow: 0 0 14px var(--primary-end);
 }
 .results-summary {
   width: min(650px, 100%) !important;
@@ -391,19 +404,25 @@ footer {
   font-size: 32px;
   margin-top: 10px;
 }
-.tabs {
+.admin-nav {
   display: flex;
   gap: 8px;
   overflow: auto;
   padding: 5px 0 20px;
 }
-.tabs button {
+.admin-nav a {
+  display: inline-flex;
+  padding: 13px 21px;
+  border: 1px solid #414862;
+  border-radius: 10px;
+  font-weight: 700;
+  text-decoration: none;
   white-space: nowrap;
 }
-.tabs .active {
-  background: #8b80e42b;
-  border-color: #9577f8;
-  color: #d4c7ff;
+.admin-nav .active {
+  background: var(--violet-tint);
+  border-color: var(--primary-end);
+  color: var(--violet-soft);
 }
 .workspace {
   padding: 25px;
@@ -486,15 +505,15 @@ td input {
   padding: 14px;
 }
 td input.selected {
-  background: #3e3d69;
-  box-shadow: inset 0 0 0 2px #a194f6;
+  background: #203f57;
+  box-shadow: inset 0 0 0 2px var(--accent-soft);
 }
 td input:disabled {
   background: #111625;
   color: #727991;
 }
 .sheet-calculations {
-  color: #c4b7ff;
+  color: var(--accent-soft);
   font-size: 12px;
   word-spacing: 3px;
   margin-top: 16px;
@@ -573,7 +592,7 @@ dialog h2 {
   left: 50%;
   transform: translateX(-50%);
   background: #303653;
-  border: 1px solid #a28be7;
+  border: 1px solid var(--primary-end);
   border-radius: 12px;
   padding: 18px;
   max-width: 90vw;
@@ -688,7 +707,7 @@ dialog h2 {
 }
 .score {
   text-shadow: none;
-  filter: drop-shadow(0 0 30px #9d8cef55);
+  filter: drop-shadow(0 0 30px var(--score-glow));
 }
 .final .score {
   text-shadow: none;
@@ -731,7 +750,7 @@ dialog h2 {
   opacity: 1;
 }
 .name-entry input:focus {
-  border-bottom-color: #b5a5ff;
+  border-bottom-color: var(--primary-start);
 }
 .name-entry #suggest:empty {
   display: none;
@@ -741,4 +760,52 @@ dialog h2 {
 }
 .name-entry #suggest .privacy {
   margin-top: 8px;
+}
+
+body {
+  isolation: isolate;
+}
+.ambient-background {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: -1;
+}
+.ambient-background span {
+  position: absolute;
+  width: 85vmax;
+  height: 85vmax;
+  border-radius: 50%;
+  will-change: transform;
+}
+.ambient-background span:first-child {
+  left: -30vmax;
+  top: -30vmax;
+  background: radial-gradient(circle, #159ed420, transparent 65%);
+  animation: ambient-float 30s ease-in-out infinite alternate;
+}
+.ambient-background span:last-child {
+  right: -30vmax;
+  bottom: -35vmax;
+  background: radial-gradient(circle, #9d59eb24, transparent 65%);
+  animation: ambient-float 38s ease-in-out -12s infinite alternate-reverse;
+}
+@keyframes ambient-float {
+  from {
+    transform: translate3d(-3vw, -2vh, 0) scale(1);
+  }
+  to {
+    transform: translate3d(10vw, 7vh, 0) scale(1.15);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ambient-background span {
+    animation: none;
+    will-change: auto;
+  }
+}
+.admin-nav a:hover {
+  border-color: var(--primary-start);
+  filter: brightness(1.12);
 }

@@ -6,7 +6,7 @@ The active application uses Node.js, Express and MongoDB again. The Supabase edi
 2. Set `MONGODB_URI` and `MONGODB_DB` for your MongoDB database.
 3. Set `SESSION_SECRET` to a new random value from `openssl rand -hex 32`.
 4. Run `npm ci`, then `npm run admin:set` to create/reset the administrator securely.
-5. Run `npm start`; students use `/` and teachers use `/admin`.
+5. Run `npm start`; students use `/` and teachers use `/admin` (redirects to `/admin/marks`). Teacher sections have separate `/admin/students`, `/admin/papers`, `/admin/classes`, `/admin/performance`, and `/admin/history` URLs.
 
 Keep `.env` private and uncommitted. Previously uploaded database credentials must be rotated before reuse. `ADMIN_PASSWORD_HASH` is an optional first-run bootstrap hash, not a plaintext password. Choose `STUDENT_ACCESS_MODE=code` when published marks require confidential access.
 
