@@ -448,3 +448,64 @@ test("existing MVP IDs and published data survive migration", async () => {
   assert.equal(response.body.papers[0].id, String(pid));
   assert.equal(response.body.papers[0].value, 78);
 });
+
+test("workbook is private, validated, persistent and protected against stale writes", async () => {
+  const agent = request.agent(app);
+  let token = (await agent.get("/api/session")).body.csrf;
+  const login = await write(
+    agent,
+    "/api/login",
+    { username: "teacher", password: "correct-password" },
+    "post",
+    token,
+  );
+  token = login.body.csrf;
+  assert.equal((await publicAgent.get("/api/admin/workbook")).status, 401);
+  const initial = (await agent.get("/api/admin/workbook")).body;
+  const body = {
+    rows: 10,
+    columns: 5,
+    cells: { A1: "20", B1: "=SUM(A1,5)" },
+    revision: initial.revision,
+  };
+  assert.equal((await agent.put("/api/admin/workbook").send(body)).status, 403);
+  const saved = await write(agent, "/api/admin/workbook", body, "put", token);
+  assert.equal(saved.status, 200);
+  assert.equal(
+    (await agent.get("/api/admin/workbook")).body.cells.B1,
+    "=SUM(A1,5)",
+  );
+  assert.equal(
+    (await write(agent, "/api/admin/workbook", body, "put", token)).status,
+    409,
+  );
+  const revision = saved.body.revision;
+  assert.equal(
+    (
+      await write(
+        agent,
+        "/api/admin/workbook",
+        { ...body, revision, cells: { Z99: "1" } },
+        "put",
+        token,
+      )
+    ).status,
+    400,
+  );
+  assert.equal(
+    (
+      await write(
+        agent,
+        "/api/admin/workbook",
+        { ...body, revision, rows: 500, columns: 100 },
+        "put",
+        token,
+      )
+    ).status,
+    400,
+  );
+  assert.equal(
+    (await agent.get("/api/admin/workbook")).body.revision,
+    revision,
+  );
+});
