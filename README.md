@@ -60,7 +60,7 @@ Collections: `students`, `classes`, `papers`, `marks`, `administrators`, `auditL
 
 ## Student experience and privacy
 
-Lookup runs only after form submission. Names match after case/whitespace normalization; otherwise up to five similar names are offered. Confirm the profile, then its stable ID is remembered in `localStorage`. There is no ordinary account-switching control. Clearing browser storage can reset this convenience; it is **not authentication or a permanent identity lock**. On a shared device, clear site data between users.
+The landing page shows only a name prompt and textbox, without a card or form. Enter your full name and press Enter (or Go on a mobile keyboard) to look up your profile. Lookup never runs while typing. Names match after case/whitespace normalization; otherwise up to five similar names are offered. Confirm the profile, then its stable ID is remembered in `localStorage`. There is no ordinary account-switching control. Clearing browser storage can reset this convenience; it is **not authentication or a permanent identity lock**. On a shared device, clear site data between users.
 
 In default `STUDENT_ACCESS_MODE=name`, anyone who knows or guesses a student's name **can see that student's published marks**. Rate limiting, limited profile fields, internal IDs, class filtering and explicit publication reduce disclosure; they do not make name lookup private. Only use this mode with informed consent for results approved for sharing. Similar-name suggestions reveal limited names/profile labels after submission. Never put sensitive identifiers in profile labels.
 

@@ -44,31 +44,53 @@ function shell(content, admin = false) {
   document.querySelector("main")?.focus({ preventScroll: true });
 }
 function home() {
-  shell(
-    `<main class="welcome"><section class="welcome-copy"><div class="eyebrow pill">A LITTLE EFFORT. A NEW LEVEL.</div><h1>Your effort.<br>Your progress.<br><span>Your next level.</span></h1><p class="lead">Behind every result is a story of learning.<br>Let’s discover your next chapter.</p><div class="journey-preview"><span>01 &nbsp; Find your profile</span><span>02 &nbsp; Unlock your results</span><span>03 &nbsp; Keep growing</span></div></section><section class="panel identity"><div class="mini-icon">✦</div><p class="eyebrow">WELCOME TO LEVELUP</p><h2>Let’s find you.</h2><p class="muted">Enter the full name your teacher has registered.</p><form id="find" class="stack"><label for="student-name">Full name</label><input id="student-name" name="name" placeholder="Your full name" maxlength="100" minlength="2" required autocomplete="name"><button>Find my profile <span>→</span></button></form><div id="suggest" class="stack" aria-live="polite"></div><p class="privacy">${sessionInfo.accessMode === "code" ? "Your teacher’s access code is required to view results." : "Name-based access shares published results with anyone who knows your name. It does not verify identity."}</p></section></main>`,
-  );
-  document.querySelector("#find").onsubmit = async (e) => {
+  finishSpin = null;
+  app.innerHTML = `<main class="name-entry" aria-labelledby="name-prompt"><div class="name-entry-content"><label id="name-prompt" class="name-prompt" for="student-name">What’s your full name?</label><input id="student-name" name="name" aria-label="Full name" placeholder="Type your full name and press Enter" maxlength="100" minlength="2" required autocomplete="name" enterkeyhint="go"><div id="suggest" class="stack" aria-live="polite" aria-busy="false"></div></div></main>`;
+  const input = document.querySelector("#student-name");
+  const target = document.querySelector("#suggest");
+  let searching = false;
+  input.oninput = () => {
+    input.setCustomValidity("");
+    target.replaceChildren();
+  };
+  input.onkeydown = async (e) => {
+    if (e.key !== "Enter" || e.isComposing || searching) return;
     e.preventDefault();
-    const target = document.querySelector("#suggest");
+    const name = input.value.trim().replace(/\s+/g, " ");
+    input.setCustomValidity(
+      name.length < 2 ? "Please enter your full name." : "",
+    );
+    if (!input.reportValidity()) return;
+    searching = true;
+    input.readOnly = true;
+    target.setAttribute("aria-busy", "true");
     target.textContent = "Finding your profile…";
     try {
-      const result = await api("/lookup", {
-        name: e.target.elements.name.value,
-      });
+      const result = await api("/lookup", { name });
       target.innerHTML = `<p>${result.exact ? "Is this your profile?" : "No exact match. Select your profile below."}</p>`;
       if (!result.students.length)
         target.textContent =
           "No matching profiles. Please contact your teacher.";
       for (const s of result.students) {
-        const b = btn(
-          `${s.name} · ${s.label}`,
-          () => choose(s),
-          "profile-card",
+        target.append(
+          btn(`${s.name} · ${s.label}`, () => choose(s), "profile-card"),
         );
-        target.append(b);
       }
-    } catch (e) {
-      target.textContent = e.message;
+      if (result.students.length) {
+        const privacy = document.createElement("p");
+        privacy.className = "privacy";
+        privacy.textContent =
+          sessionInfo.accessMode === "code"
+            ? "Your teacher’s access code is required to view results."
+            : "Name-based access shares published results with anyone who knows your name. It does not verify identity.";
+        target.append(privacy);
+      }
+    } catch (error) {
+      target.textContent = error.message;
+    } finally {
+      searching = false;
+      input.readOnly = false;
+      target.setAttribute("aria-busy", "false");
     }
   };
 }
