@@ -16,3 +16,4 @@ dist/
 __pycache__/
 mongo-export/
 .env.example
+.env.example
