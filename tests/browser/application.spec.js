@@ -623,3 +623,192 @@ test("admin performance and history remain searchable and class dialogs can be c
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
 });
+
+test("Excel-style worksheet saves formulas, recalculates, inserts rows and columns, pastes and reloads", async ({
+  page,
+}) => {
+  await signIn(page);
+  await page
+    .getByRole("button", { name: "Flexible worksheet", exact: true })
+    .click();
+  const host = page.locator("#flexible-workspace");
+  const formula = page.getByRole("textbox", {
+    name: "Cell formula or value",
+    exact: true,
+  });
+  const saved = () =>
+    expect(host.locator(".workbook-status")).toHaveText("All changes saved");
+  async function edit(address, value) {
+    await host.getByRole("textbox", { name: address, exact: true }).click();
+    await formula.fill(value);
+    await formula.press("Enter");
+    await saved();
+  }
+  await edit("A1", "20");
+  await edit("B1", "=SUM(A1,5)");
+  await expect(
+    host.getByRole("textbox", { name: "B1", exact: true }),
+  ).toHaveValue("25");
+  await edit("A1", "30");
+  await expect(
+    host.getByRole("textbox", { name: "B1", exact: true }),
+  ).toHaveValue("35");
+  await host.getByRole("textbox", { name: "A1", exact: true }).click();
+  await host
+    .getByRole("button", { name: "Insert row above", exact: true })
+    .click();
+  await saved();
+  await expect(
+    host.getByRole("textbox", { name: "B2", exact: true }),
+  ).toHaveValue("35");
+  await host.getByRole("textbox", { name: "B2", exact: true }).click();
+  await expect(formula).toHaveValue("=SUM(A2,5)");
+  await host.getByRole("button", { name: "Add column", exact: true }).click();
+  await saved();
+  await expect(host.locator("thead th")).toHaveCount(14);
+  await host.getByRole("button", { name: "Undo", exact: true }).click();
+  await saved();
+  await expect(host.locator("thead th")).toHaveCount(13);
+  await host.getByRole("button", { name: "Redo", exact: true }).click();
+  await saved();
+  await expect(host.locator("thead th")).toHaveCount(14);
+  const a3 = host.getByRole("textbox", { name: "A3", exact: true });
+  await a3.click();
+  await a3.evaluate((el) => {
+    const data = new DataTransfer();
+    data.setData("text/plain", "10\t20\n30\t40");
+    el.dispatchEvent(
+      new ClipboardEvent("paste", {
+        clipboardData: data,
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+  });
+  await saved();
+  await edit("C3", "=AVERAGE(A3:B4)");
+  await expect(
+    host.getByRole("textbox", { name: "C3", exact: true }),
+  ).toHaveValue("25");
+  await host.getByRole("textbox", { name: "B2", exact: true }).click();
+  const clipboard = await host
+    .getByRole("textbox", { name: "B2", exact: true })
+    .evaluate((el) => {
+      const data = new DataTransfer();
+      el.dispatchEvent(
+        new ClipboardEvent("copy", {
+          clipboardData: data,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      return Object.fromEntries(
+        [...data.types].map((type) => [type, data.getData(type)]),
+      );
+    });
+  await host.getByRole("textbox", { name: "B5", exact: true }).click();
+  await host
+    .getByRole("textbox", { name: "B5", exact: true })
+    .evaluate((el, clipboard) => {
+      const data = new DataTransfer();
+      for (const [type, value] of Object.entries(clipboard))
+        data.setData(type, value);
+      el.dispatchEvent(
+        new ClipboardEvent("paste", {
+          clipboardData: data,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+    }, clipboard);
+  await saved();
+  await expect(
+    host.getByRole("textbox", { name: "B5", exact: true }),
+  ).toHaveValue("5");
+  await host.getByRole("textbox", { name: "B5", exact: true }).click();
+  await expect(formula).toHaveValue("=SUM(A5,5)");
+  await host
+    .getByRole("textbox", { name: "B5", exact: true })
+    .press("Shift+ArrowDown");
+  await host.getByRole("button", { name: "Fill down", exact: true }).click();
+  await saved();
+  await expect(
+    host.getByRole("textbox", { name: "B6", exact: true }),
+  ).toHaveValue("5");
+  await host.getByRole("textbox", { name: "A1", exact: true }).click();
+  page.once("dialog", (dialog) => dialog.accept());
+  await host.getByRole("button", { name: "Delete row", exact: true }).click();
+  await saved();
+  await expect(
+    host.getByRole("textbox", { name: "B1", exact: true }),
+  ).toHaveValue("35");
+  await host.getByRole("button", { name: "Undo", exact: true }).click();
+  await saved();
+  await page.reload();
+  await page
+    .getByRole("button", { name: "Flexible worksheet", exact: true })
+    .click();
+  await expect(
+    host.getByRole("textbox", { name: "C3", exact: true }),
+  ).toHaveValue("25");
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.screenshot({
+    path: "docs/screenshots/worksheet.png",
+    fullPage: true,
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBeTruthy();
+  await page
+    .getByRole("button", { name: "Student marks", exact: true })
+    .click();
+  const first = page.locator("#marks-workspace td input").first();
+  await first.fill("=SUM(10,15)");
+  await first.press("Tab");
+  await expect(page.locator("#save-status")).toHaveText("All changes saved");
+  await expect(first).toHaveValue("25");
+});
+
+test("worksheet failed saves block navigation and retry without losing edits", async ({
+  page,
+}) => {
+  await signIn(page);
+  await page
+    .getByRole("button", { name: "Flexible worksheet", exact: true })
+    .click();
+  await page.route("**/api/admin/workbook", (route) =>
+    route.request().method() === "PUT"
+      ? route.fulfill({
+          status: 503,
+          contentType: "application/json",
+          body: JSON.stringify({ error: "Temporary workbook save failure" }),
+        })
+      : route.continue(),
+  );
+  const host = page.locator("#flexible-workspace");
+  await host.getByRole("textbox", { name: "D10", exact: true }).click();
+  const formula = page.getByRole("textbox", {
+    name: "Cell formula or value",
+    exact: true,
+  });
+  await formula.fill("=SUM(10,20)");
+  await formula.press("Enter");
+  await expect(host.locator(".workbook-status")).toContainText(
+    "Temporary workbook save failure",
+  );
+  await page.getByRole("link", { name: "Students", exact: true }).click();
+  await expect(page).toHaveURL(/\/admin\/marks$/);
+  await expect(
+    host.getByRole("textbox", { name: "D10", exact: true }),
+  ).toHaveValue("30");
+  await page.unroute("**/api/admin/workbook");
+  await host.getByRole("button", { name: "Retry save", exact: true }).click();
+  await expect(host.locator(".workbook-status")).toHaveText(
+    "All changes saved",
+  );
+  await page.getByRole("link", { name: "Students", exact: true }).click();
+  await expect(page).toHaveURL(/\/admin\/students$/);
+});

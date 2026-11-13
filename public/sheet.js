@@ -1,3 +1,4 @@
+import { calculator, columnName } from "./formulas.js";
 // Native, accessible spreadsheet. Only validated numeric values/absence leave this module.
 export function mountSheet(host, { students, papers, marks, save, onStatus }) {
   let anchor = [0, 0],
@@ -18,13 +19,13 @@ export function mountSheet(host, { students, papers, marks, save, onStatus }) {
   const table = document.createElement("table");
   table.setAttribute("aria-label", "Student marks spreadsheet");
   const header = table.createTHead().insertRow();
-  for (const label of [
+  for (const [index, label] of [
     "Student / profile",
     ...papers.map((p) => `${p.name} · /${p.max}`),
-  ]) {
+  ].entries()) {
     const th = document.createElement("th");
     th.scope = "col";
-    th.textContent = label;
+    th.textContent = `${columnName(index)} · ${label}`;
     header.append(th);
   }
   const body = table.createTBody();
@@ -32,7 +33,7 @@ export function mountSheet(host, { students, papers, marks, save, onStatus }) {
     const tr = body.insertRow();
     const th = document.createElement("th");
     th.scope = "row";
-    th.textContent = s.name + (s.label ? " · " + s.label : "");
+    th.textContent = `${r + 2} · ` + s.name + (s.label ? " · " + s.label : "");
     tr.append(th);
     inputs[r] = [];
     papers.forEach((p, c) => {
@@ -100,13 +101,20 @@ export function mountSheet(host, { students, papers, marks, save, onStatus }) {
     const sum = ns.reduce((a, b) => a + b, 0);
     status.textContent = `COUNT ${ns.length}  ·  SUM ${sum.toFixed(2)}  ·  AVERAGE ${ns.length ? (sum / ns.length).toFixed(2) : "—"}  ·  MIN ${ns.length ? Math.min(...ns) : "—"}  ·  MAX ${ns.length ? Math.max(...ns) : "—"}`;
   }
-  function parsed(raw, c) {
-    const s = String(raw).trim();
+  function parsed(
+    raw,
+    c,
+    formulaValue = () => {
+      throw Error("Invalid formula");
+    },
+  ) {
+    let s = String(raw).trim();
+    if (s.startsWith("=")) s = String(formulaValue(s));
     if (!s) return "";
     if (s.toUpperCase() === "A") return "A";
     if (!/^\d+(\.\d{1,2})?$/.test(s))
       throw Error(
-        "Use a number, blank, or A for absent. Formulas cannot be stored.",
+        "Use a number, blank, A for absent, or a formula returning a number with at most two decimals.",
       );
     const v = Number(s);
     if (v > papers[c].max)
@@ -146,11 +154,31 @@ export function mountSheet(host, { students, papers, marks, save, onStatus }) {
   }
   async function commit(changes) {
     try {
+      const cells = {};
+      students.forEach((student, r) => {
+        cells["A" + (r + 2)] = student.name;
+        papers.forEach(
+          (paper, c) =>
+            (cells[columnName(c + 1) + (r + 2)] = String(
+              values.get(key(r, c)) ?? "",
+            )),
+        );
+      });
+      for (const { r, c, next } of changes)
+        if (inputs[r]?.[c] && !inputs[r][c].disabled)
+          cells[columnName(c + 1) + (r + 2)] = String(next);
+      const calculate = calculator(
+        cells,
+        students.length + 1,
+        papers.length + 1,
+      );
       const normalized = changes
         .filter((x) => inputs[x.r]?.[x.c] && !inputs[x.r][x.c].disabled)
         .map((x) => ({
           ...x,
-          next: parsed(x.next, x.c),
+          next: parsed(x.next, x.c, () =>
+            calculate(columnName(x.c + 1) + (x.r + 2)),
+          ),
           previous: values.get(key(x.r, x.c)) ?? "",
         }));
       if (!normalized.length) return;
