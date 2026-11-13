@@ -24,3 +24,9 @@ GitHub Actions runs the integration/browser/format checks on push and pull reque
 The circular/orbital graphic has been removed. The retained motion system uses a straight underline and rectangular paper frame, with centered welcome typography and an unframed score. Tests confirm that canvas, circles, ellipses, orbital emblems and WebGL requests are absent while the reveal, summary and replay remain functional.
 
 Updated screenshots and the preview video in `docs/recordings/student-journey.webm` use synthetic records. API/session initialization is awaited before element references are captured. All primary scene nodes persist across transitions; the rendering no longer depends on GPU/browser WebGL capabilities.
+
+## Admin UI refresh
+
+The admin redesign retains separate protected HTML pages and existing MongoDB APIs. Validation completed with 15 API tests, the full 16-test browser suite, and a subsequent seven-test admin run including the added performance/history/dialog check. CI runs the final 17-test browser suite. Formatting and `git diff --check` pass.
+
+New coverage exercises directory search, activity/publication filters, empty-state recovery, keyboard dialog cancellation, normalized performance bars, searchable audit history, and mobile overflow. Existing checks continue to cover spreadsheet bulk paste, validation, undo/redo, keyboard navigation, safe pending-save navigation, session logout, and protected deep links. Screenshots use synthetic fixture data; no production records are included.

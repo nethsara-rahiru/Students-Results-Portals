@@ -157,3 +157,9 @@ Regularly test `mongorestore` to an **isolated** database/server and verify stud
 - `public/sheet.js`: spreadsheet interactions; `public/reveal.js`: animation and evidence-based messages; `public/style.css`: responsive theme and ambient background.
 - `scripts/admin.js`: local administrator provisioning/reset.
 - `tests/`: isolated integration and browser tests; `deploy/`: VPS examples; `docs/`: architecture, verification and screenshots.
+
+### Admin workspace
+
+Open `/admin` to sign in. Each section has its own URL and supports refresh and browser history. The redesigned workspace includes a desktop sidebar, horizontally scrollable mobile navigation, searchable student/class/paper/performance directories, student activity and paper publication filters, and searchable change history. Performance bars use normalized percentages and exclude absent or blank entries. Marks save automatically; wait for the save indicator before leaving. Expand the keyboard guide for spreadsheet shortcuts. Edit dialogs support Escape, Cancel, validation feedback, and a pending-save state.
+
+Admin UI previews: [marks workspace](docs/screenshots/admin.png), [paper management](docs/screenshots/admin-papers.png), and [mobile directory](docs/screenshots/admin-mobile.png).
