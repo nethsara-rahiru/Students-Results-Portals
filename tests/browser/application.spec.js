@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 async function identify(page, name) {
   await page.goto("/");
   await page.getByLabel("Full name", { exact: true }).fill(name);
-  await page.getByRole("button", { name: "Find my profile" }).click();
+  await page.getByLabel("Full name", { exact: true }).press("Enter");
   await page.getByRole("button", { name: new RegExp(name + " ·") }).click();
   await page.getByRole("button", { name: "Discover my results" }).click();
 }
@@ -14,6 +14,8 @@ test("no suggestions before submission, multi-paper reveal and final celebration
     if (r.url().endsWith("/api/lookup")) lookups++;
   });
   await page.goto("/");
+  await expect(page.locator("form, .panel, header, footer")).toHaveCount(0);
+  await expect(page.getByLabel("Full name", { exact: true })).toBeVisible();
   await page.getByLabel("Full name", { exact: true }).fill("Maya Fernando");
   await page.waitForTimeout(150);
   expect(lookups).toBe(0);
@@ -21,7 +23,7 @@ test("no suggestions before submission, multi-paper reveal and final celebration
     path: "docs/screenshots/welcome.png",
     fullPage: true,
   });
-  await page.getByRole("button", { name: "Find my profile" }).click();
+  await page.getByLabel("Full name", { exact: true }).press("Enter");
   await page.getByRole("button", { name: /Maya Fernando ·/ }).click();
   await page.getByRole("button", { name: "Discover my results" }).click();
   await expect(
