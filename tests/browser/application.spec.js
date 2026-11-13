@@ -139,6 +139,9 @@ test("teacher spreadsheet: navigation, paste, validation, fill, undo, search and
   await cells.nth(1).fill("31");
   await page.keyboard.press("Tab");
   await expect(page.locator("#save-status")).toHaveText("All changes saved");
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.locator("h1").click();
+  await page.evaluate(() => scrollTo(0, 0));
   await page.screenshot({ path: "docs/screenshots/admin.png", fullPage: true });
   await page.getByLabel("Find student").fill("Maya");
   await expect(cells).toHaveCount(2);
@@ -533,4 +536,90 @@ test("mobile high-precision scores and long paper titles stay readable through s
       () => document.documentElement.scrollWidth <= innerWidth,
     ),
   ).toBe(true);
+});
+
+test("admin directories filter, empty states recover, and dialogs support keyboard cancellation", async ({
+  page,
+}) => {
+  await signIn(page, "/admin/students");
+  await expect(
+    page.getByRole("heading", { name: "Student directory" }),
+  ).toBeVisible();
+  const initialCount = await page.locator(".management-row").count();
+  const search = page.getByLabel("Search students", { exact: true });
+  await search.fill("Maya");
+  await expect(page.locator(".management-row:visible")).toHaveCount(1);
+  await search.fill("no-such-student");
+  await expect(page.getByText("Nothing here yet")).toBeVisible();
+  await search.fill("");
+  await page
+    .getByRole("combobox", { name: "Student status", exact: true })
+    .selectOption("inactive");
+  await expect(page.locator(".management-row:visible")).toHaveCount(0);
+  await page
+    .getByRole("combobox", { name: "Student status", exact: true })
+    .selectOption("");
+  await expect(page.locator(".management-row:visible")).toHaveCount(
+    initialCount,
+  );
+  await page
+    .getByRole("button", { name: "+ Add student", exact: true })
+    .click();
+  await expect(
+    page.getByRole("dialog", { name: "Add student", exact: true }),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page.getByRole("link", { name: "Papers", exact: true }).click();
+  await page
+    .getByRole("combobox", { name: "Publication status", exact: true })
+    .selectOption("published");
+  await expect(page.locator(".management-row:visible")).toHaveCount(2);
+  await page.screenshot({
+    path: "docs/screenshots/admin-papers.png",
+    fullPage: true,
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole("link", { name: "Students", exact: true }).click();
+  await expect(
+    page.getByRole("navigation", { name: "Workspace sections" }),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBeTruthy();
+  await page.screenshot({
+    path: "docs/screenshots/admin-mobile.png",
+    fullPage: true,
+  });
+});
+
+test("admin performance and history remain searchable and class dialogs can be cancelled", async ({
+  page,
+}) => {
+  await signIn(page, "/admin/performance");
+  await expect(
+    page.getByRole("heading", { name: "Performance overview" }),
+  ).toBeVisible();
+  const average = page.getByRole("meter", {
+    name: "Maya Fernando average percentage",
+  });
+  const percentage = Number(await average.getAttribute("value"));
+  expect(percentage).toBeGreaterThanOrEqual(0);
+  expect(percentage).toBeLessThanOrEqual(100);
+  await page.getByLabel("Search performance", { exact: true }).fill("Maya");
+  await expect(page.locator(".management-row:visible")).toHaveCount(1);
+  await page.getByRole("link", { name: "History", exact: true }).click();
+  await page
+    .getByLabel("Search history", { exact: true })
+    .fill("no-such-audit-event");
+  await expect(page.locator("#audit details:visible")).toHaveCount(0);
+  await page.getByRole("link", { name: "Classes", exact: true }).click();
+  await page.getByRole("button", { name: "Create class" }).click();
+  await expect(
+    page.getByRole("dialog", { name: "Create class" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
 });
