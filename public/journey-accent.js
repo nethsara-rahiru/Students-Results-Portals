@@ -1,6 +1,6 @@
 // One non-circular accent: a straight underline opens into the paper frame,
 // then closes back into a line beneath the score. No canvas or orbital artwork.
-export const coreArtwork = `<svg class="core-accent" viewBox="0 0 600 600" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="paper-accent"><stop stop-color="#159ED4"/><stop offset="1" stop-color="#9D59EB"/></linearGradient></defs><path class="core-fill" fill="#b4e7fc" fill-opacity=".025"/><path class="core-outline" fill="none" stroke="url(#paper-accent)" stroke-width="1.25" vector-effect="non-scaling-stroke"/></svg>`;
+export const coreArtwork = `<svg class="core-accent" viewBox="0 0 600 600" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="paper-accent" gradientUnits="userSpaceOnUse" x1="30" y1="0" x2="570" y2="0"><stop stop-color="#159ED4"/><stop offset="1" stop-color="#9D59EB"/></linearGradient></defs><path class="core-fill" fill="#b4e7fc" fill-opacity=".025"/><path class="core-outline" fill="none" stroke="url(#paper-accent)" stroke-width="1.25" vector-effect="non-scaling-stroke"/></svg>`;
 export class JourneyAccent {
   constructor(core, media) {
     this.core = core;
