@@ -90,9 +90,9 @@ Each valid published paper is revealed individually in spreadsheet order. The st
 
 ## Continuous student scene
 
-The student journey is mounted once. The same graphic, heading, input, score host and controls remain attached through identification, welcome, paper selection, score reveal, summary and replay. Native Web Animations move/scale those actual elements using measured layouts (FLIP), while the artwork changes from an orbital ring into a paper frame and back into the score/achievement ring. The score starts rolling during that same transformation; views are not replaced with new markup between phases.
+The student journey is mounted once. The same graphic, heading, input, score host and controls remain attached through identification, welcome, paper selection, score reveal, summary and replay. Native Web Animations move/scale those actual elements using measured layouts (FLIP), while a straight accent line opens into a rectangular paper frame and closes beneath the score. The circular/orbital artwork has been removed; the welcome page is centered and the mark is shown openly without a surrounding ring. The score starts rolling during that same transformation; views are not replaced with new markup between phases.
 
-Original WebGL artwork supplies lit, machined surfaces and orbital depth. The geometry and lighting evolve with the scene; an original, detailed SVG layer provides sharp edges and a complete fallback when WebGL is unavailable or a context is lost. Graphics are bounded to 30 frames per second, use up to 2× device pixel ratio with a 1280-pixel render-target cap, pause when the tab is hidden, and do not control result correctness. The local variable Manrope font is distributed with its [Open Font License](public/assets/manrope-LICENSE.txt). No remote font, image CDN or animation framework is required.
+The motion uses lightweight SVG lines and rectangles, with no canvas, WebGL or GPU-specific rendering dependency. The local variable Manrope font is distributed with its [Open Font License](public/assets/manrope-LICENSE.txt). No remote font, image CDN or animation framework is required.
 
 **Skip transition** completes the current layout morph; **Skip animation** finishes the score reels exactly. Reduced-motion preferences remove motion, including when changed during a reveal. Existing reels are reused on replay, and cancelled callbacks cannot complete a later paper. The name-entry landing still contains only the name prompt/textbox before submission.
 
@@ -146,13 +146,12 @@ Regularly test `mongorestore` to an **isolated** database/server and verify stud
 - Validated mark batches and audit inserts are separate MongoDB writes, without a cross-document transaction. A database outage midway can leave a partially persisted batch or a missing audit event. Avoid simultaneous teachers editing the same cells: concurrent writes use last-write-wins and have no conflict UI. Backups and the save/error indicator remain necessary.
 - Existing collection schemas are not replaced automatically. Migrated MVP data should be reviewed before publication. Previously existing collection validators may require manual migration.
 - Undo is local to the current grid, not a global database rollback. No offline editing, CSV/workbook file import, email delivery, or automatic backup scheduler.
-- The WebGL scene depends on browser/driver capabilities; the SVG fallback preserves functionality with simpler lighting. No hardware-specific frame-rate guarantee is made.
 - E2E verification covers Chromium, including mobile viewport simulation, not physical devices or every browser. No independent penetration test or formal accessibility certification has been performed.
 
 ## Source layout
 
 - `server.js`: application factory, MongoDB setup/migrations, sessions, security and APIs.
-- `public/app.js`: student bootstrap; `public/journey.js`: persistent scene/state transitions; `public/journey-graphics.js`: original WebGL/SVG artwork; `public/journey.css`: student layouts and motion.
+- `public/app.js`: student bootstrap; `public/journey.js`: persistent scene/state transitions; `public/journey-accent.js`: non-circular line/paper-frame motion; `public/journey.css`: student layouts and motion.
 - `public/admin.js`: teacher pages; `public/client.js`: shared API/session and UI helpers.
 - `views/admin/`: separate protected admin HTML documents.
 - `public/sheet.js`: spreadsheet interactions; `public/reveal.js`: animation and evidence-based messages; `public/style.css`: responsive theme and ambient background.

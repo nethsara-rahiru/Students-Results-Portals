@@ -1,6 +1,6 @@
 import { api, esc } from "./client.js";
 import { animateScore, motivation, celebrate } from "./reveal.js";
-import { JourneyGraphics, coreArtwork } from "./journey-graphics.js";
+import { JourneyAccent, coreArtwork } from "./journey-accent.js";
 
 // Mounted once: the title, graphic, input, score and controls retain their DOM
 // identity through the whole student journey. Layout changes use real FLIP transforms.
@@ -22,7 +22,7 @@ export class StudentJourney {
       <h1 id="journey-title" class="journey-title"><span id="journey-heading">What’s your full name?</span><span id="journey-name" hidden></span></h1>
       <p id="journey-subtitle" class="journey-subtitle" hidden></p>
       <div id="identity-fields" class="journey-entry"><input id="student-name" name="name" aria-label="Full name" placeholder="Type your full name and press Enter" maxlength="100" minlength="2" required autocomplete="name" enterkeyhint="go"><div id="suggest" class="stack" aria-live="polite" aria-busy="false"></div></div>
-      <div id="journey-core" class="journey-core" aria-hidden="true">${coreArtwork}<span class="core-coordinate" aria-hidden="true">LEVELUP / PROGRESS</span><div id="score" class="journey-score" role="img" aria-label="Score" aria-hidden="true"></div><span id="core-max" class="core-max" hidden></span><button id="paper" class="core-trigger" aria-labelledby="journey-title core-callout" hidden><span id="core-callout">Click to reveal your result →</span></button></div>
+      <div id="journey-core" class="journey-core" aria-hidden="true">${coreArtwork}<div id="score" class="journey-score" role="img" aria-label="Score" aria-hidden="true"></div><span id="core-max" class="core-max" hidden></span><button id="paper" class="core-trigger" aria-labelledby="journey-title core-callout" hidden><span id="core-callout">Click to reveal your result →</span></button></div>
       <div id="message" class="journey-message" aria-live="polite"><div id="achievement" class="journey-achievement badge" hidden><svg viewBox="0 0 150 38" aria-hidden="true"><path d="m4 34 8-8-5-8m5 8 10-2m-5-4 7-7-4-7m4 7 9-1M146 34l-8-8 5-8m-5 8-10-2m5-4-7-7 4-7m-4 7-9-1"/><path d="m64 28 22-22m-18 0h18v18"/></svg><span>CHAPTER COMPLETE</span></div><p id="motivation"></p></div>
       <p id="error" class="journey-error" role="status"></p>
       <div id="actions" class="journey-actions" hidden><button id="primary-action"></button><button id="secondary-action" class="secondary" hidden></button><button id="skip-score" class="journey-link" hidden>Skip animation</button></div>
@@ -65,7 +65,7 @@ export class StudentJourney {
     this.core = node("journey-core");
     this.title = node("journey-title");
     this.input = node("student-name");
-    this.graphics = new JourneyGraphics(this.core, this.media);
+    this.accent = new JourneyAccent(this.core, this.media);
     this.input.addEventListener("input", () => {
       this.input.setCustomValidity("");
       node("suggest").replaceChildren();
@@ -86,9 +86,7 @@ export class StudentJourney {
     this.onResize = () => {
       this.finishMotion();
       this.layout();
-      this.graphics.resize();
-      this.graphics.draw();
-      this.graphics.setActive(!["identify", "access"].includes(this.state));
+      this.accent.draw();
     };
     window.addEventListener("resize", this.onResize);
     this.onPreference = () => {
@@ -179,9 +177,9 @@ export class StudentJourney {
         innerHeight * 0.5 - (this.state === "access" ? 165 : 100),
       );
     } else if (this.state === "welcome") {
-      titleWidth = mobile ? width - 48 : Math.min(width * 0.46, 650);
-      titleX = mobile ? 24 : pad;
-      titleY = mobile ? 108 : Math.max(155, base * 0.28);
+      titleWidth = Math.min(width - 48, 900);
+      titleX = (width - titleWidth) / 2;
+      titleY = Math.max(140, base * 0.28);
     } else if (this.state === "summary") {
       titleWidth = mobile ? width - 150 : Math.min(700, width - 300);
       titleX = mobile ? 24 : Math.max(pad, (width - 820) / 2);
@@ -213,20 +211,18 @@ export class StudentJourney {
         actionsY + actions.offsetHeight + 60,
       );
     } else if (this.state === "welcome") {
-      coreWidth = mobile
-        ? Math.min(width - 72, 330)
-        : Math.min(width * 0.42, 510);
-      coreHeight = coreWidth;
-      coreX = mobile ? (width - coreWidth) / 2 : width * 0.73 - coreWidth / 2;
-      coreY = mobile
-        ? titleBottom + 34
-        : Math.max(120, (base - coreHeight) / 2);
-      const subtitleY = mobile ? coreY + coreHeight + 12 : titleBottom + 23;
-      this.pose(subtitle, titleX, subtitleY, titleWidth);
-      actionsY = Math.max(
-        subtitleY + subtitle.offsetHeight + 26,
-        mobile ? 0 : base * 0.71,
+      coreWidth = Math.min(width - 72, 500);
+      coreHeight = 2;
+      coreX = (width - coreWidth) / 2;
+      coreY = titleBottom + 20;
+      const subtitleY = titleBottom + 44;
+      this.pose(
+        subtitle,
+        (width - Math.min(width - 48, 620)) / 2,
+        subtitleY,
+        Math.min(width - 48, 620),
       );
+      actionsY = Math.max(subtitleY + subtitle.offsetHeight + 30, base * 0.65);
       this.pose(error, titleX, actionsY, titleWidth);
       if (error.textContent) actionsY += error.offsetHeight + 16;
       this.pose(actions, titleX, actionsY, titleWidth);
@@ -294,8 +290,8 @@ export class StudentJourney {
     const mark = this.data?.papers[this.index]?.value ?? 0;
     this.node("score").style.fontSize =
       Math.min(
-        coreWidth * 0.34,
-        (coreWidth * 0.7) / (String(mark).length * 0.58),
+        coreWidth * 0.42,
+        (coreWidth * 0.84) / (String(mark).length * 0.58),
       ) + "px";
     const progress = this.node("journey-progress");
     Object.assign(progress.style, {
@@ -322,7 +318,7 @@ export class StudentJourney {
         animation.cancel();
       }
     }
-    this.graphics.finish();
+    this.accent.finish();
   }
   async transition(state, update) {
     if (this.disposed) return;
@@ -361,12 +357,7 @@ export class StudentJourney {
     this.node("score").setAttribute("aria-hidden", String(state !== "reveal"));
     update?.();
     this.layout();
-    if (state !== "identify" && state !== "access")
-      this.graphics.morph(
-        state === "paper" ? 1 : 0,
-        this.root.dataset.final === "true" ? 0.65 : 0,
-        this.media.matches ? 0 : 900,
-      );
+    this.accent.morph(state === "paper" ? 1 : 0, this.media.matches ? 0 : 900);
     this.animations = [];
     if (!this.media.matches) {
       elements.forEach((element, i) => {
@@ -402,10 +393,8 @@ export class StudentJourney {
     this.show("skip-transition", false);
     this.lock(false);
     if (state === "identify" || state === "access") {
-      this.graphics.finish();
-      this.graphics.setActive(false);
+      this.accent.finish();
     } else {
-      this.graphics.setActive(true);
       this.title.setAttribute("tabindex", "-1");
       this.title.focus({ preventScroll: true });
     }
@@ -657,7 +646,7 @@ export class StudentJourney {
         : "ONE STEP FORWARD. KEEP GOING.",
     );
     if (last) {
-      this.graphics.morph(0, 1, this.media.matches ? 0 : 1200);
+      this.accent.morph(0, this.media.matches ? 0 : 1200);
       celebrate(this.root, this.media.matches);
       if (!this.media.matches)
         for (const path of this.node("achievement").querySelectorAll("path")) {
@@ -702,7 +691,7 @@ export class StudentJourney {
     this.disposed = true;
     this.finishSpin?.cancel?.();
     this.finishMotion();
-    this.graphics.dispose();
+    this.accent.dispose();
     window.removeEventListener("resize", this.onResize);
     this.media.removeEventListener("change", this.onPreference);
   }
