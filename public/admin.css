@@ -833,3 +833,131 @@ body[data-admin-page="login"] footer {
   color: #8c9bb6;
   margin-right: 12px;
 }
+.sheet-tabs {
+  display: flex;
+  gap: 8px;
+  border-bottom: 1px solid #34435c;
+  padding: 22px 0 14px;
+}
+.sheet-tabs button[aria-pressed="true"] {
+  background: #159ed426;
+  border-color: #159ed4;
+  color: #bce9fc;
+}
+.workbook-ribbon {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 20px 0;
+}
+.workbook-ribbon > div {
+  flex-basis: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.workbook-ribbon small {
+  font-size: 10px;
+  color: #9aabc6;
+}
+.formula-bar {
+  display: flex;
+  align-items: center;
+  background: #101a2b;
+  border: 1px solid #3c4e6e;
+  border-radius: 7px;
+  overflow: hidden;
+}
+.formula-bar output {
+  padding: 14px;
+  min-width: 65px;
+  color: #a9ddec;
+  font-size: 12px;
+  border-right: 1px solid #3c4e6e;
+}
+.formula-bar label {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  gap: 12px;
+  padding-left: 12px;
+}
+.formula-bar input {
+  border: 0;
+  border-radius: 0;
+  font-size: 12px;
+  background: transparent;
+}
+.workbook-grid tbody th {
+  min-width: 45px;
+  width: 45px;
+  text-align: center;
+}
+.workbook-grid td input {
+  width: 130px;
+  text-align: left;
+}
+.workbook-grid thead th {
+  text-align: center;
+  padding: 8px;
+}
+.workbook-grid td input {
+  padding: 10px;
+}
+.workbook-grid .formula-cell {
+  color: #b4ddeb;
+}
+.workbook-grid .cell-error {
+  color: #ffb1b1;
+}
+.workbook-status,
+.workbook-selection {
+  font-size: 11px;
+  color: #a8dacf;
+}
+.workbook-status.error {
+  color: #ffb1b1;
+}
+[hidden] {
+  display: none !important;
+}
+@media (max-width: 760px) {
+  .workbook-ribbon small {
+    display: none;
+  }
+  .workbook-ribbon button {
+    flex: 1;
+    white-space: nowrap;
+  }
+  .workbook-grid tbody th {
+    min-width: 42px;
+  }
+  .formula-bar label {
+    min-width: 0;
+  }
+}
+body[data-admin-page="marks"] .stats {
+  display: none;
+}
+body[data-admin-page="marks"] .workspace {
+  margin-top: 24px;
+}
+.workbook-grid {
+  max-height: 66vh;
+}
+.workbook-grid th button {
+  display: block;
+  width: 100%;
+  padding: 0;
+  min-height: 22px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #b6c9e4;
+  font: inherit;
+}
+.workbook-grid th button:hover {
+  transform: none;
+  background: #354b6b;
+}

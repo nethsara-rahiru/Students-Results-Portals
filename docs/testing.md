@@ -30,3 +30,7 @@ Updated screenshots and the preview video in `docs/recordings/student-journey.we
 The admin redesign retains separate protected HTML pages and existing MongoDB APIs. Validation completed with 15 API tests, the full 16-test browser suite, and a subsequent seven-test admin run including the added performance/history/dialog check. CI runs the final 17-test browser suite. Formatting and `git diff --check` pass.
 
 New coverage exercises directory search, activity/publication filters, empty-state recovery, keyboard dialog cancellation, normalized performance bars, searchable audit history, and mobile overflow. Existing checks continue to cover spreadsheet bulk paste, validation, undo/redo, keyboard navigation, safe pending-save navigation, session logout, and protected deep links. Screenshots use synthetic fixture data; no production records are included.
+
+## Flexible worksheet
+
+Validation: 21 Node tests (16 API integration tests and five formula-engine tests) and 19 browser tests. Added checks cover private workbook access, CSRF, persisted formulas, revision conflicts, bounds validation, circular/invalid/extreme references, bounded parsing, aggregates, logical functions, copy/fill anchors, row insertion/deletion with undo, column addition, TSV paste, live recalculation, reload persistence, mobile overflow, numeric-only mark persistence, and failed-save navigation/retry. Formula expressions never execute JavaScript. Screenshots use isolated MongoDB fixture data.

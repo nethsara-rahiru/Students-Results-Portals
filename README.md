@@ -163,3 +163,17 @@ Regularly test `mongorestore` to an **isolated** database/server and verify stud
 Open `/admin` to sign in. Each section has its own URL and supports refresh and browser history. The redesigned workspace includes a desktop sidebar, horizontally scrollable mobile navigation, searchable student/class/paper/performance directories, student activity and paper publication filters, and searchable change history. Performance bars use normalized percentages and exclude absent or blank entries. Marks save automatically; wait for the save indicator before leaving. Expand the keyboard guide for spreadsheet shortcuts. Edit dialogs support Escape, Cancel, validation feedback, and a pending-save state.
 
 Admin UI previews: [marks workspace](docs/screenshots/admin.png), [paper management](docs/screenshots/admin-papers.png), and [mobile directory](docs/screenshots/admin-mobile.png).
+
+### Excel-style worksheet
+
+In **Admin → Marks**, use **Add student row** to create a student and **Create paper** to add a paper column. The student-marks grid labels columns A, B, C… and student rows from 2 (row 1 is the header). You can enter formulas such as `=SUM(B2:C2)` or `=ROUND(B2/2,2)`; only the calculated, validated numeric result is saved as a mark. Those formulas are snapshots, so use **Flexible worksheet** for calculations that must update when referenced cells change.
+
+The flexible worksheet is a shared, admin-only workspace stored in MongoDB's `workbooks` collection. It supports arbitrary text/numbers/formulas, adding/inserting/deleting rows and columns, a formula bar, range selection, bulk TSV paste, undo/redo, fill down, and copy/paste. Within this worksheet, copying preserves formulas and adjusts relative references; copying to student marks or another application provides calculated values. `$A$1`, `$A1`, and `A$1` anchors work with fill/copy. Structural edits update references; undo can restore deleted data.
+
+Supported functions: `SUM`, `AVERAGE`, `MIN`, `MAX`, `COUNT`, `COUNTA`, `ROUND`, `ABS`, `IF`, `AND`, `OR`, `NOT`; also arithmetic, comparisons, percentages, quoted strings, A1 cell references and rectangular ranges. Formula errors and circular references are shown in cells. Expressions are interpreted without JavaScript evaluation or external access. This is a practical Excel-style subset, with eager IF argument evaluation; macros, full Excel formula compatibility, formatting tools, and XLSX import/export are not implemented.
+
+**Load marks snapshot** copies current data into the worksheet after confirmation. Worksheet calculations do not create papers, publish results, or change actual marks automatically. To use a calculated result, copy its value into the student-marks grid; the existing maximum, precision, class and publication rules still apply.
+
+Limits: one shared worksheet, 500 rows, 100 columns, 10,000 total cells, 1,000 characters per cell, 2,000 pasted cells per operation, and the API's 512 KB request limit. Saves use revision checks: a stale session receives a conflict instead of overwriting newer work. Failed saves retain edits in the open page and block ordinary navigation; use **Retry save**. For a conflict, copy your unsaved values before reloading and reapplying them. Closing the browser can still lose unsaved edits. Include `workbooks` in database backups.
+
+[Worksheet preview](docs/screenshots/worksheet.png).

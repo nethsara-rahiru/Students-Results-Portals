@@ -5,7 +5,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "test": "node --test tests/api.test.js",
+    "test": "node --test tests/api.test.js tests/formulas.test.js",
     "test:e2e": "playwright test",
     "admin:set": "node scripts/admin.js",
     "format:check": "prettier --check server.js public views tests scripts playwright.config.js"

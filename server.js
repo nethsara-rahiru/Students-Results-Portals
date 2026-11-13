@@ -91,6 +91,15 @@ export async function createApp({ db, client, config = {} }) {
         status: { enum: ["present", "absent"] },
       },
     },
+    workbooks: {
+      required: ["rows", "columns", "cells", "revision"],
+      properties: {
+        rows: { bsonType: ["int", "double"], minimum: 1, maximum: 500 },
+        columns: { bsonType: ["int", "double"], minimum: 1, maximum: 100 },
+        cells: { bsonType: "object" },
+        revision: { bsonType: ["int", "double"], minimum: 0 },
+      },
+    },
     administrators: {
       required: ["username", "passwordHash"],
       properties: {
@@ -292,6 +301,83 @@ export async function createApp({ db, client, config = {} }) {
         db.collection("classes").find().sort({ name: 1 }).toArray(),
       ]);
       res.json({ students, papers, marks, classes });
+    }),
+  );
+  app.get(
+    "/api/admin/workbook",
+    wrap(async (req, res) => {
+      res.json(
+        (await db.collection("workbooks").findOne({ _id: "workspace" })) || {
+          _id: "workspace",
+          rows: 30,
+          columns: 12,
+          cells: {},
+          revision: 0,
+        },
+      );
+    }),
+  );
+  app.put(
+    "/api/admin/workbook",
+    wrap(async (req, res) => {
+      const workbook = z
+        .object({
+          rows: z.number().int().min(1).max(500),
+          columns: z.number().int().min(1).max(100),
+          revision: z.number().int().min(0),
+          cells: z.record(
+            z.string().regex(/^[A-Z]{1,2}[1-9]\d{0,2}$/),
+            z.string().max(1000),
+          ),
+        })
+        .parse(req.body);
+      if (
+        workbook.rows * workbook.columns > 10000 ||
+        Object.keys(workbook.cells).length > 10000
+      )
+        throw fail(400, "Worksheet supports at most 10,000 cells");
+      for (const ref of Object.keys(workbook.cells)) {
+        const [, letters, row] = /^([A-Z]+)(\d+)$/.exec(ref);
+        const col = [...letters].reduce(
+          (n, c) => n * 26 + c.charCodeAt(0) - 64,
+          0,
+        );
+        if (Number(row) > workbook.rows || col > workbook.columns)
+          throw fail(400, "Cell outside worksheet bounds");
+      }
+      try {
+        const result = await db.collection("workbooks").updateOne(
+          { _id: "workspace", revision: workbook.revision },
+          {
+            $set: {
+              ...workbook,
+              revision: workbook.revision + 1,
+              updatedAt: new Date(),
+              updatedBy: req.session.admin,
+            },
+          },
+          { upsert: workbook.revision === 0 },
+        );
+        if (!result.matchedCount && !result.upsertedCount)
+          throw fail(
+            409,
+            "Workbook changed in another session. Reload before editing.",
+          );
+      } catch (error) {
+        if (error.code === 11000)
+          throw fail(
+            409,
+            "Workbook changed in another session. Reload before editing.",
+          );
+        throw error;
+      }
+      await audit(req, "save", "workbook", {
+        rows: workbook.rows,
+        columns: workbook.columns,
+        cells: Object.keys(workbook.cells).length,
+        revision: workbook.revision + 1,
+      });
+      res.json({ revision: workbook.revision + 1 });
     }),
   );
   app.get(

@@ -1,3 +1,4 @@
+import { mountWorkbook } from "./workbook.js";
 import { mountSheet } from "./sheet.js";
 import { api, app, esc, btn, shell, notify } from "./client.js";
 let sessionInfo, sheet;
@@ -95,7 +96,10 @@ function dialog(title, fields, onSubmit) {
     submit.disabled = true;
     submit.textContent = "Saving…";
     try {
-      if (sheet?.isBusy() && !(await sheet.whenIdle()))
+      if (
+        (sheet?.isBusy() || sheet?.hasUnsavedChanges()) &&
+        !(await sheet.whenIdle())
+      )
         throw Error(
           "The previous marks edit could not be saved. Please retry it first.",
         );
@@ -128,7 +132,10 @@ async function admin() {
     <div class="admin-content"><header class="admin-topbar"><span>Workspace <span class="muted">/ ${pageTitles[page]}</span></span><span class="workspace-label">TEACHER EDITION</span></header><main class="dashboard" tabindex="-1"><div class="dashboard-title"><p class="eyebrow">YOUR TEACHING, IN FOCUS</p><h1>${pageTitles[page]}</h1><p class="muted">${descriptions[page]}</p></div><div class="stats"><article><span>Active students</span><strong>${data.students.filter((s) => s.active).length}</strong><small>Learning journeys</small></article><article><span>Total papers</span><strong>${data.papers.length}</strong><small>In spreadsheet order</small></article><article><span>Published</span><strong>${data.papers.filter((p) => p.state === "published").length}</strong><small>Visible to students</small></article><article><span>Classes</span><strong>${data.classes.length}</strong><small>Organized for you</small></article></div><section class="panel workspace"><div id="workspace" tabindex="-1"></div></section><footer>LevelUp Results<span>Small steps. Meaningful progress.</span></footer></main></div>`;
   document.querySelector("#logout").onclick = async () => {
     document.activeElement?.blur();
-    if (sheet?.isBusy() && !(await sheet.whenIdle())) {
+    if (
+      (sheet?.isBusy() || sheet?.hasUnsavedChanges()) &&
+      !(await sheet.whenIdle())
+    ) {
       notify("Please retry your marks save before signing out.");
       return;
     }
@@ -147,7 +154,7 @@ async function admin() {
       )
         return;
       document.activeElement?.blur();
-      if (!sheet?.isBusy()) return;
+      if (!sheet?.isBusy() && !sheet?.hasUnsavedChanges()) return;
       event.preventDefault();
       if (await sheet.whenIdle()) location.assign(link.href);
       else
@@ -202,8 +209,42 @@ async function admin() {
   }
   async function render() {
     if (page === "marks") {
-      area.innerHTML = `<div class="top"><div><h2>Marks studio</h2><p class="muted">One clear view. Every paper, in reveal order.</p></div><button id="add-paper">+ Create paper</button></div><div class="toolbar"><label class="search">Find student<input id="search" type="search" placeholder="Search by name"></label><label>Class<select id="class-filter">${options(data.classes, null)}</select></label><label>Sort<select id="sort"><option value="asc">Name A–Z</option><option value="desc">Name Z–A</option></select></label><button id="undo" class="secondary">Undo</button><button id="redo" class="secondary">Redo</button><button id="fill" class="secondary">Fill down</button></div><details class="keyboard-guide"><summary>Keyboard shortcuts & entry guide</summary><p class="sheet-help">Shift + arrows selects a range · Tab / Enter navigates · Copy / paste from Excel · Ctrl/⌘ + D fills down · Delete clears · A = absent · Blank = no result</p></details><p id="save-status" role="status">All changes saved</p><div id="sheet" class="sheet" tabindex="0" aria-label="Scrollable marks editor"></div>`;
+      area.innerHTML = `<div class="top"><div><h2>Marks studio</h2><p class="muted">One clear view. Every paper, in reveal order.</p></div><div class="row"><button id="add-student-row" class="secondary">+ Add student row</button><button id="add-paper">+ Create paper</button></div></div><div class="sheet-tabs" role="group" aria-label="Spreadsheet workspace"><button id="marks-tab" class="secondary" aria-pressed="true">Student marks</button><button id="workbook-tab" class="secondary" aria-pressed="false">Flexible worksheet</button></div><div id="marks-workspace"><div class="toolbar"><label class="search">Find student<input id="search" type="search" placeholder="Search by name"></label><label>Class<select id="class-filter">${options(data.classes, null)}</select></label><label>Sort<select id="sort"><option value="asc">Name A–Z</option><option value="desc">Name Z–A</option></select></label><button id="undo" class="secondary">Undo</button><button id="redo" class="secondary">Redo</button><button id="fill" class="secondary">Fill down</button></div><details class="keyboard-guide"><summary>Keyboard shortcuts & entry guide</summary><p class="sheet-help">Shift + arrows selects a range · Tab / Enter navigates · Copy / paste from Excel · Ctrl/⌘ + D fills down · Delete clears · A = absent · Blank = no result · Formulas such as =SUM(B2:C2) save their calculated value; use the flexible worksheet for live formulas.</p></details><p id="save-status" role="status">All changes saved</p><div id="sheet" class="sheet" tabindex="0" aria-label="Scrollable marks editor"></div></div><div id="flexible-workspace" hidden></div>`;
       document.querySelector("#add-paper").onclick = () => paperForm();
+      document.querySelector("#add-student-row").onclick = () => studentForm();
+      let marksController, workbookController;
+      async function switchSheet(workbook) {
+        document.activeElement?.blur();
+        if (
+          (sheet?.isBusy() || sheet?.hasUnsavedChanges()) &&
+          !(await sheet.whenIdle())
+        ) {
+          notify("Please retry saving before switching worksheets.");
+          return;
+        }
+        if (workbook && !workbookController) {
+          try {
+            workbookController = await mountWorkbook(
+              document.querySelector("#flexible-workspace"),
+              data,
+            );
+          } catch (error) {
+            notify(error.message);
+            return;
+          }
+        }
+        sheet = workbook ? workbookController : marksController;
+        document.querySelector("#marks-workspace").hidden = workbook;
+        document.querySelector("#flexible-workspace").hidden = !workbook;
+        document
+          .querySelector("#marks-tab")
+          .setAttribute("aria-pressed", String(!workbook));
+        document
+          .querySelector("#workbook-tab")
+          .setAttribute("aria-pressed", String(workbook));
+      }
+      document.querySelector("#marks-tab").onclick = () => switchSheet(false);
+      document.querySelector("#workbook-tab").onclick = () => switchSheet(true);
       const draw = () => {
         if (sheet?.isBusy()) return;
         area.querySelector(".sheet-calculations")?.remove();
@@ -224,7 +265,7 @@ async function admin() {
         const papers = data.papers.filter(
           (p) => !cls || !p.classId || p.classId === cls,
         );
-        sheet = mountSheet(document.querySelector("#sheet"), {
+        sheet = marksController = mountSheet(document.querySelector("#sheet"), {
           students,
           papers,
           marks: data.marks,
