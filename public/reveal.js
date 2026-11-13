@@ -5,24 +5,35 @@ export function animateScore(
 ) {
   let stopped = false;
   const digits = String(value).split("");
-  host.replaceChildren();
+  // Keep existing reels attached when replaying or moving to another paper.
+  const oldSlots = [...host.children];
+  for (const slot of oldSlots) slot.hidden = true;
   host.setAttribute("aria-label", "Revealing score");
   const strips = digits.map((char) => {
-    const slot = document.createElement("span");
+    const kind = char === "." ? "dot" : "number";
+    const slot =
+      oldSlots.find(
+        (candidate) => candidate.hidden && candidate.dataset.kind === kind,
+      ) || document.createElement("span");
+    slot.hidden = false;
+    slot.dataset.kind = kind;
     slot.className = "digit-slot";
     if (char === ".") {
       slot.textContent = ".";
       host.append(slot);
       return null;
     }
-    const strip = document.createElement("span");
+    const strip = slot.firstElementChild || document.createElement("span");
     strip.className = "digit-strip";
     strip.setAttribute("aria-hidden", "true");
-    for (let i = 0; i < 51; i++) {
-      const n = document.createElement("span");
-      n.textContent = i % 10;
-      strip.append(n);
-    }
+    if (!strip.children.length)
+      for (let i = 0; i < 51; i++) {
+        const n = document.createElement("span");
+        n.textContent = i % 10;
+        strip.append(n);
+      }
+    strip.style.transition = "none";
+    strip.style.transform = "translateY(0em)";
     slot.append(strip);
     host.append(slot);
     return { strip, target: 40 + Number(char) };
@@ -54,6 +65,10 @@ export function animateScore(
     }),
   );
   timer = setTimeout(finish, reduced ? 0 : duration + digits.length * 90 + 30);
+  finish.cancel = () => {
+    stopped = true;
+    clearTimeout(timer);
+  };
   return finish;
 }
 export function motivation(papers, index) {

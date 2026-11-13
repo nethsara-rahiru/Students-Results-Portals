@@ -89,6 +89,10 @@ test("mobile layout and keyboard profile selection", async ({ page }) => {
       () => document.documentElement.scrollWidth <= innerWidth,
     ),
   ).toBe(true);
+  await expect(page.locator("#student-journey")).toHaveAttribute(
+    "aria-busy",
+    "false",
+  );
   await page.screenshot({
     path: "docs/screenshots/mobile.png",
     fullPage: true,
@@ -281,4 +285,265 @@ test("a failed marks save keeps the teacher on the page until they retry", async
   await expect(page).toHaveURL(/\/admin\/students$/);
   await page.getByRole("link", { name: "Marks", exact: true }).click();
   await expect(page.locator("td input").first()).toHaveValue("29");
+});
+test("one graphic and title transform continuously through both papers, summary and replay", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.locator("#student-journey").waitFor();
+  const same = await page.evaluateHandle(() => ({
+    root: document.querySelector("#student-journey"),
+    core: document.querySelector("#journey-core"),
+    title: document.querySelector("#journey-title"),
+    score: document.querySelector("#score"),
+    input: document.querySelector("#student-name"),
+  }));
+  const assertSame = async () =>
+    expect(
+      await page.evaluate(
+        (nodes) =>
+          Object.entries(nodes).every(
+            ([key, node]) =>
+              node ===
+              document.querySelector(
+                {
+                  root: "#student-journey",
+                  core: "#journey-core",
+                  title: "#journey-title",
+                  score: "#score",
+                  input: "#student-name",
+                }[key],
+              ),
+          ),
+        same,
+      ),
+    ).toBe(true);
+  await page.getByLabel("Full name", { exact: true }).fill("Maya Fernando");
+  await page.getByLabel("Full name", { exact: true }).press("Enter");
+  await page.getByRole("button", { name: /Maya Fernando ·/ }).click();
+  await expect
+    .poll(() =>
+      page
+        .locator("#journey-core")
+        .evaluate((core) =>
+          core
+            .getAnimations()
+            .some(
+              (a) =>
+                a.playState === "running" &&
+                a.effect
+                  .getKeyframes()
+                  .some((k) => k.transform && k.transform !== "none"),
+            ),
+        ),
+    )
+    .toBe(true);
+  await page.getByRole("button", { name: "Discover my results" }).waitFor();
+  await assertSame();
+  const circle = await page.locator(".core-outline").getAttribute("d");
+  const response = page.waitForResponse((r) =>
+    r.url().includes("/api/results/"),
+  );
+  await page.getByRole("button", { name: "Discover my results" }).click();
+  const data = await (await response).json();
+  await expect(page.locator("#paper")).toBeEnabled();
+  await assertSame();
+  expect(await page.locator(".core-outline").getAttribute("d")).not.toBe(
+    circle,
+  );
+  for (let index = 0; index < data.papers.length; index++) {
+    await page
+      .getByRole("button", {
+        name: new RegExp(
+          data.papers[index].name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+        ),
+      })
+      .click();
+    await page
+      .getByRole("button", { name: "Skip animation", exact: true })
+      .click();
+    await expect(page.locator("#score")).toHaveAttribute(
+      "aria-label",
+      "Score " + data.papers[index].value,
+    );
+    await assertSame();
+    if (index < data.papers.length - 1)
+      await page.getByRole("button", { name: "Next paper" }).click();
+  }
+  await page.getByRole("button", { name: "View all results" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Your progress." }),
+  ).toBeVisible();
+  await assertSame();
+  await expect(page.locator(".result-row")).toHaveCount(data.papers.length);
+  await page.getByRole("button", { name: "Replay my journey" }).click();
+  await expect(page.locator("#paper")).toBeEnabled();
+  await assertSame();
+});
+test("motion can be skipped or reduced mid-flight without stale spinner callbacks", async ({
+  page,
+}) => {
+  await identify(page, "Single Student");
+  await page.getByRole("button", { name: /Mathematics · Paper 01/ }).click();
+  await page
+    .getByRole("button", { name: "Skip transition", exact: true })
+    .click();
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await expect(page.locator("#score")).toHaveAttribute("aria-label", "Score 0");
+  await expect(
+    page.getByRole("button", { name: "View all results" }),
+  ).toBeEnabled();
+  await expect(page.locator(".confetti")).toHaveCount(0);
+  await page
+    .getByRole("button", { name: "Replay journey", exact: true })
+    .click();
+  await page.getByRole("button", { name: /Mathematics · Paper 01/ }).click();
+  await expect(page.locator("#score")).toHaveAttribute("aria-label", "Score 0");
+  await expect(page.locator("#score")).toHaveAttribute("data-complete", "true");
+});
+test("detailed SVG graphics preserve the full reveal when WebGL is unavailable", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const context = HTMLCanvasElement.prototype.getContext;
+    HTMLCanvasElement.prototype.getContext = function (type, ...args) {
+      if (type === "webgl" || type === "experimental-webgl") return null;
+      return context.call(this, type, ...args);
+    };
+  });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await identify(page, "Single Student");
+  await expect(page.locator("#journey-core")).toHaveAttribute(
+    "data-renderer",
+    "svg",
+  );
+  expect(
+    (await page.locator(".core-outline").getAttribute("d")).length,
+  ).toBeGreaterThan(1000);
+  await page.getByRole("button", { name: /Mathematics · Paper 01/ }).click();
+  await expect(page.locator("#score")).toHaveAttribute("aria-label", "Score 0");
+  await expect(page.locator(".core-bevel")).toBeVisible();
+  await page.getByRole("button", { name: "View all results" }).click();
+  await expect(page.locator(".result-row")).toHaveCount(1);
+});
+test("the procedural shader compiles when WebGL is supported and context loss falls back safely", async ({
+  page,
+}) => {
+  await page.goto("/");
+  const supported = await page.evaluate(() => {
+    const canvas = document.createElement("canvas");
+    const gl = canvas.getContext("webgl", { powerPreference: "low-power" });
+    if (!gl) return false;
+    gl.getExtension("WEBGL_lose_context")?.loseContext();
+    return true;
+  });
+  test.skip(
+    !supported,
+    "This browser has no WebGL; the SVG fallback is tested separately.",
+  );
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.getByLabel("Full name", { exact: true }).fill("Single Student");
+  await page.getByLabel("Full name", { exact: true }).press("Enter");
+  await page.getByRole("button", { name: /Single Student ·/ }).click();
+  await expect(page.locator("#journey-core")).toHaveAttribute(
+    "data-renderer",
+    "webgl",
+  );
+  await page.evaluate(() => document.fonts.ready);
+  expect(
+    await page.evaluate(() => document.fonts.check("600 16px Manrope")),
+  ).toBe(true);
+  await page
+    .locator(".core-canvas")
+    .evaluate((canvas) =>
+      canvas.dispatchEvent(new Event("webglcontextlost", { cancelable: true })),
+    );
+  await expect(page.locator("#journey-core")).toHaveAttribute(
+    "data-renderer",
+    "svg",
+  );
+  await page.getByRole("button", { name: "Discover my results" }).click();
+  await page.getByRole("button", { name: /Mathematics · Paper 01/ }).click();
+  await expect(page.locator("#score")).toHaveAttribute("aria-label", "Score 0");
+});
+test("the persistent input supports confidential access codes before revealing results", async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("http://localhost:3101/");
+  const input = await page.locator("#student-name").elementHandle();
+  await page.getByLabel("Full name", { exact: true }).fill("Maya Fernando");
+  const lookup = page.waitForResponse((r) => r.url().endsWith("/api/lookup"));
+  await page.getByLabel("Full name", { exact: true }).press("Enter");
+  const profile = (await (await lookup).json()).students[0];
+  expect(
+    (
+      await page.request.get("http://localhost:3101/api/results/" + profile._id)
+    ).status(),
+  ).toBe(401);
+  await page.getByRole("button", { name: /Maya Fernando ·/ }).click();
+  expect(
+    await input.evaluate(
+      (node) =>
+        node === document.querySelector("#student-name") &&
+        node.type === "password",
+    ),
+  ).toBe(true);
+  await page.getByLabel("Your teacher’s access code").fill("wrong-code");
+  await page.getByRole("button", { name: "Open my results" }).click();
+  await expect(page.locator("#error")).toContainText("Invalid");
+  await page
+    .getByLabel("Your teacher’s access code")
+    .fill("student-secret-code");
+  await page.getByRole("button", { name: "Open my results" }).click();
+  await page.getByRole("button", { name: "Discover my results" }).click();
+  await page.getByRole("button", { name: /Mathematics · Paper 01/ }).click();
+  await expect(page.locator("#score")).toHaveAttribute("data-complete", "true");
+});
+test("mobile high-precision scores and long paper titles stay readable through summary", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.route("**/api/results/*", (route) =>
+    route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        student: "Maya Fernando",
+        papers: [
+          {
+            id: "precision",
+            name: "Advanced Mathematics — End of Term Comprehensive Assessment",
+            subject: "Mathematics",
+            max: 10000,
+            value: 9999.99,
+          },
+        ],
+      }),
+    }),
+  );
+  await identify(page, "Maya Fernando");
+  await page.getByRole("button", { name: /Advanced Mathematics/ }).click();
+  await expect(page.locator("#score")).toHaveAttribute(
+    "aria-label",
+    "Score 9999.99",
+  );
+  const bounds = await page.evaluate(() => {
+    const score = document.querySelector("#score").getBoundingClientRect(),
+      core = document.querySelector("#journey-core").getBoundingClientRect(),
+      title = document.querySelector("#journey-title").getBoundingClientRect();
+    return {
+      fits:
+        score.left >= 0 && score.right <= innerWidth && title.bottom < core.top,
+      horizontal: document.documentElement.scrollWidth <= innerWidth,
+    };
+  });
+  expect(bounds).toEqual({ fits: true, horizontal: true });
+  await page.getByRole("button", { name: "View all results" }).click();
+  await expect(page.locator(".result-row")).toContainText("9999.99");
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
 });

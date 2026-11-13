@@ -13,3 +13,11 @@ Each administrator section is served from its own template in `views/admin/`: lo
 The student module (`public/app.js`) and teacher module (`public/admin.js`) share CSRF-aware requests and common UI helpers in `public/client.js`. Admin forms reload their current document after successful writes. Spreadsheet navigation waits for pending saves, and browser reload/close warns while marks are unsaved. Returning from a cached admin document triggers a fresh authorization check.
 
 CSS theme tokens define the cyan/purple gradient and accessible lighter accents. Noninteractive, clipped, composited background layers animate slowly behind the content, and CSS reduced-motion rules stop their motion.
+
+## Persistent student motion system
+
+`StudentJourney` mounts one scene and retains the graphic, title, input, score host and controls across all student phases. The input changes mode for access-code verification and is cleared after successful verification. A measured layout accommodates narrow screens, long names/titles, decimals and the 10000-mark maximum. FLIP Web Animations transform the real DOM nodes from their old bounds to the next layout; no route or shell replacement is used inside the student flow.
+
+`JourneyGraphics` continuously interpolates a circular SDF ring into a rounded paper frame. A locally authored shader provides lighting and orbit depth; a shared SVG path morph supplies crisp geometry and a detailed fallback. Context loss falls back without affecting the score engine. The renderer caps pixel ratio/render-target size and frame rate, pauses when hidden, and respects reduced motion. The bundled variable font is local and licensed.
+
+Score reels start during the graphic morph, are reused on subsequent papers, settle at the exact database value, and expose a cancellable completion handle. Skip/reduced-motion changes are coordinated with layout completion so an old callback cannot reveal the wrong paper or duplicate a celebration. Summary/replay reuse the same scene. All authentication, publication and ordering decisions remain in the existing MongoDB APIs.

@@ -21,6 +21,7 @@ const students = [
     nameKey: "maya fernando",
     active: true,
     label: "Grade 10 · 01",
+    accessCodeHash: await bcrypt.hash("student-secret-code", 10),
   },
   {
     _id: new ObjectId(),
@@ -61,10 +62,19 @@ await db.collection("marks").insertMany([
   { studentId: students[0]._id, paperId: papers[1]._id, value: 42 },
   { studentId: students[2]._id, paperId: papers[0]._id, value: 0 },
 ]);
-const server = app.listen(3100, () => console.log("Fixture server on 3100"));
+const codeApp = await createApp({
+  db,
+  client,
+  config: { secret: "code-browser-secret-".repeat(4), accessMode: "code" },
+});
+const codeServer = codeApp.listen(3101);
+const server = app.listen(3100, () =>
+  console.log("Fixture servers on 3100 and 3101"),
+);
 for (const sig of ["SIGINT", "SIGTERM"])
   process.on(sig, async () => {
     server.close();
+    codeServer.close();
     await client.close();
     await mongo.stop();
     process.exit(0);
