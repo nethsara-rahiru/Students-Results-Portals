@@ -340,7 +340,7 @@ test("one graphic and title transform continuously through both papers, summary 
     .toBe(true);
   await page.getByRole("button", { name: "Discover my results" }).waitFor();
   await assertSame();
-  const circle = await page.locator(".core-outline").getAttribute("d");
+  const underline = await page.locator(".core-outline").getAttribute("d");
   const response = page.waitForResponse((r) =>
     r.url().includes("/api/results/"),
   );
@@ -349,7 +349,7 @@ test("one graphic and title transform continuously through both papers, summary 
   await expect(page.locator("#paper")).toBeEnabled();
   await assertSame();
   expect(await page.locator(".core-outline").getAttribute("d")).not.toBe(
-    circle,
+    underline,
   );
   for (let index = 0; index < data.papers.length; index++) {
     await page
@@ -401,70 +401,57 @@ test("motion can be skipped or reduced mid-flight without stale spinner callback
   await expect(page.locator("#score")).toHaveAttribute("aria-label", "Score 0");
   await expect(page.locator("#score")).toHaveAttribute("data-complete", "true");
 });
-test("detailed SVG graphics preserve the full reveal when WebGL is unavailable", async ({
+test("results remain functional without requesting WebGL or rendering orbital artwork", async ({
   page,
 }) => {
   await page.addInitScript(() => {
-    const context = HTMLCanvasElement.prototype.getContext;
+    window.webglRequests = 0;
+    const original = HTMLCanvasElement.prototype.getContext;
     HTMLCanvasElement.prototype.getContext = function (type, ...args) {
-      if (type === "webgl" || type === "experimental-webgl") return null;
-      return context.call(this, type, ...args);
+      if (type === "webgl" || type === "experimental-webgl") {
+        window.webglRequests++;
+        return null;
+      }
+      return original.call(this, type, ...args);
     };
   });
   await page.emulateMedia({ reducedMotion: "reduce" });
   await identify(page, "Single Student");
-  await expect(page.locator("#journey-core")).toHaveAttribute(
-    "data-renderer",
-    "svg",
-  );
-  expect(
-    (await page.locator(".core-outline").getAttribute("d")).length,
-  ).toBeGreaterThan(1000);
   await page.getByRole("button", { name: /Mathematics · Paper 01/ }).click();
   await expect(page.locator("#score")).toHaveAttribute("aria-label", "Score 0");
-  await expect(page.locator(".core-bevel")).toBeVisible();
+  expect(await page.evaluate(() => window.webglRequests)).toBe(0);
+  await expect(
+    page.locator(
+      "#journey-core canvas,#journey-core circle,#journey-core ellipse,.core-emblem,.core-satellites",
+    ),
+  ).toHaveCount(0);
   await page.getByRole("button", { name: "View all results" }).click();
   await expect(page.locator(".result-row")).toHaveCount(1);
 });
-test("the procedural shader compiles when WebGL is supported and context loss falls back safely", async ({
+test("the welcome and score screens use open typography without a circular frame", async ({
   page,
 }) => {
-  await page.goto("/");
-  const supported = await page.evaluate(() => {
-    const canvas = document.createElement("canvas");
-    const gl = canvas.getContext("webgl", { powerPreference: "low-power" });
-    if (!gl) return false;
-    gl.getExtension("WEBGL_lose_context")?.loseContext();
-    return true;
-  });
-  test.skip(
-    !supported,
-    "This browser has no WebGL; the SVG fallback is tested separately.",
-  );
   await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/");
   await page.getByLabel("Full name", { exact: true }).fill("Single Student");
   await page.getByLabel("Full name", { exact: true }).press("Enter");
   await page.getByRole("button", { name: /Single Student ·/ }).click();
-  await expect(page.locator("#journey-core")).toHaveAttribute(
-    "data-renderer",
-    "webgl",
+  await expect(page.locator("#student-journey")).toHaveAttribute(
+    "aria-busy",
+    "false",
   );
-  await page.evaluate(() => document.fonts.ready);
   expect(
-    await page.evaluate(() => document.fonts.check("600 16px Manrope")),
-  ).toBe(true);
-  await page
-    .locator(".core-canvas")
-    .evaluate((canvas) =>
-      canvas.dispatchEvent(new Event("webglcontextlost", { cancelable: true })),
-    );
-  await expect(page.locator("#journey-core")).toHaveAttribute(
-    "data-renderer",
-    "svg",
-  );
+    (await page.locator("#journey-core").boundingBox()).height,
+  ).toBeLessThanOrEqual(2);
+  await expect(
+    page.locator(".core-canvas,.core-emblem,.core-satellites"),
+  ).toHaveCount(0);
   await page.getByRole("button", { name: "Discover my results" }).click();
   await page.getByRole("button", { name: /Mathematics · Paper 01/ }).click();
   await expect(page.locator("#score")).toHaveAttribute("aria-label", "Score 0");
+  await expect(
+    page.locator(".core-accent circle,.core-accent ellipse"),
+  ).toHaveCount(0);
 });
 test("the persistent input supports confidential access codes before revealing results", async ({
   page,
