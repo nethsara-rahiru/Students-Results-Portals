@@ -70,7 +70,12 @@ export function motivation(papers, index) {
 }
 export function celebrate(host, reduced) {
   if (reduced) return;
-  const colors = ["#768CF9", "#9577F8", "#e9c982", "#9cdecf"];
+  const colors = [
+    "var(--primary-start)",
+    "var(--primary-end)",
+    "#e9c982",
+    "#9cdecf",
+  ];
   for (let i = 0; i < 40; i++) {
     const bit = document.createElement("i");
     bit.className = "confetti";

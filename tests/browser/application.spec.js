@@ -138,17 +138,20 @@ test("teacher spreadsheet: navigation, paste, validation, fill, undo, search and
   await page.screenshot({ path: "docs/screenshots/admin.png", fullPage: true });
   await page.getByLabel("Find student").fill("Maya");
   await expect(cells).toHaveCount(2);
-  await page.getByRole("button", { name: "Students", exact: true }).click();
+  await page.getByRole("link", { name: "Students", exact: true }).click();
   await page.getByRole("button", { name: "Add student" }).click();
   await page.getByLabel("Full name", { exact: true }).fill("New Student");
   await page.getByLabel("Profile label").fill("Group C");
   await page.getByRole("button", { name: "Save changes" }).click();
-  await page.getByRole("button", { name: "Students", exact: true }).click();
+  await page.getByRole("link", { name: "Students", exact: true }).click();
   await expect(page.getByText("New Student", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Papers", exact: true }).click();
+  await page.getByRole("link", { name: "Papers", exact: true }).click();
   await page.getByRole("button", { name: "Create paper" }).click();
   await page.getByLabel("Paper name").fill("Draft Paper 03");
   await page.getByRole("button", { name: "Save changes" }).click();
+  await expect(page).toHaveURL(/\/admin\/papers$/);
+  await expect(page.getByText("Draft Paper 03", { exact: true })).toBeVisible();
+  await page.getByRole("link", { name: "Marks", exact: true }).click();
   await expect(page.locator("thead")).toContainText("Draft Paper 03");
 });
 test("teacher mobile workspace remains within viewport", async ({ page }) => {
@@ -166,4 +169,116 @@ test("teacher mobile workspace remains within viewport", async ({ page }) => {
   await page.locator("td input").last().focus();
   await page.keyboard.press("Tab");
   await expect(page.locator("td input").last()).not.toBeFocused();
+});
+
+async function signIn(page, path = "/admin") {
+  await page.goto(path);
+  await page.getByLabel("Username", { exact: true }).fill("teacher");
+  await page.getByLabel("Password", { exact: true }).fill("browser-password");
+  await page.getByRole("button", { name: /Sign in/ }).click();
+}
+test("admin pages navigate as documents, refresh and history preserve the page, and logout protects deep links", async ({
+  page,
+}) => {
+  await signIn(page, "/admin/students");
+  await expect(page).toHaveURL(/\/admin\/students$/);
+  await expect(page).toHaveTitle("Students · LevelUp Results");
+  const navigations = [];
+  page.on("request", (r) => {
+    if (r.isNavigationRequest() && r.frame() === page.mainFrame())
+      navigations.push(r.url());
+  });
+  for (const section of [
+    "Papers",
+    "Classes",
+    "Performance",
+    "History",
+    "Marks",
+  ]) {
+    await page.getByRole("link", { name: section, exact: true }).click();
+    await expect(page).toHaveURL(
+      new RegExp("/admin/" + section.toLowerCase() + "$"),
+    );
+    await expect(
+      page.getByRole("link", { name: section, exact: true }),
+    ).toHaveAttribute("aria-current", "page");
+    await expect(page).toHaveTitle(section + " · LevelUp Results");
+  }
+  expect(navigations.length).toBeGreaterThanOrEqual(5);
+  await page.reload();
+  await expect(page.locator(".sheet")).toBeVisible();
+  await page.goBack();
+  await expect(page).toHaveURL(/\/admin\/history$/);
+  await expect(
+    page.getByRole("heading", { name: "Change history" }),
+  ).toBeVisible();
+  await page.goForward();
+  await expect(page).toHaveURL(/\/admin\/marks$/);
+  await page.getByRole("button", { name: "Sign out" }).click();
+  await expect(page).toHaveURL(/\/admin\/login$/);
+  await page.goto("/admin/papers");
+  await expect(page).toHaveURL(/\/admin\/login\?next=/);
+  await expect(page.getByLabel("Password", { exact: true })).toBeVisible();
+  await expect(page.locator(".dashboard")).toHaveCount(0);
+});
+test("leaving the marks page waits for an in-flight save and persists the edit", async ({
+  page,
+}) => {
+  await signIn(page);
+  await page.route("**/api/admin/marks", async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    await route.continue();
+  });
+  const cell = page.locator("td input").first();
+  await cell.fill("27");
+  await page.getByRole("link", { name: "Students", exact: true }).click();
+  await expect(page).toHaveURL(/\/admin\/students$/);
+  await page.getByRole("link", { name: "Marks", exact: true }).click();
+  await expect(page.locator("td input").first()).toHaveValue("27");
+});
+test("ambient background follows the new palette and respects reduced motion", async ({
+  page,
+}) => {
+  await page.goto("/");
+  const palette = await page.evaluate(() => {
+    const s = getComputedStyle(document.documentElement);
+    return [
+      s.getPropertyValue("--primary-start").trim(),
+      s.getPropertyValue("--primary-end").trim(),
+    ];
+  });
+  expect(palette).toEqual(["#159ed4", "#9d59eb"]);
+  const layer = page.locator(".ambient-background span").first();
+  await expect(layer).toHaveCSS("animation-name", "ambient-float");
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await expect(layer).toHaveCSS("animation-name", "none");
+});
+test("a failed marks save keeps the teacher on the page until they retry", async ({
+  page,
+}) => {
+  await signIn(page);
+  await page.route("**/api/admin/marks", async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    await route.fulfill({
+      status: 503,
+      contentType: "application/json",
+      body: JSON.stringify({ error: "Temporary save failure" }),
+    });
+  });
+  const cell = page.locator("td input").first();
+  await cell.fill("29");
+  await page.getByRole("link", { name: "Students", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText(
+    "Please retry before leaving",
+  );
+  await expect(page).toHaveURL(/\/admin\/marks$/);
+  await expect(page.locator("#save-status")).toHaveText(
+    "Temporary save failure",
+  );
+  await page.unroute("**/api/admin/marks");
+  await cell.fill("29");
+  await page.getByRole("link", { name: "Students", exact: true }).click();
+  await expect(page).toHaveURL(/\/admin\/students$/);
+  await page.getByRole("link", { name: "Marks", exact: true }).click();
+  await expect(page.locator("td input").first()).toHaveValue("29");
 });

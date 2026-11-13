@@ -8,7 +8,7 @@
     "test": "node --test tests/api.test.js",
     "test:e2e": "playwright test",
     "admin:set": "node scripts/admin.js",
-    "format:check": "prettier --check server.js public tests scripts playwright.config.js"
+    "format:check": "prettier --check server.js public views tests scripts playwright.config.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

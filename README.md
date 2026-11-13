@@ -4,6 +4,8 @@ A usable student results portal and teacher workspace, built with vanilla HTML/C
 
 ![Student welcome](docs/screenshots/welcome.png)
 
+The primary theme gradient is **#159ED4 → #9D59EB**, with matching focus, navigation, spreadsheet and celebration accents.
+
 ## MongoDB restored
 
 `main` now uses the Node/Express + MongoDB implementation again. The Supabase edition remains on `feat/supabase-github-pages` and in Git history; its project/data have not been deleted. Its Pages deployment workflow is removed. GitHub Pages cannot host this backend: deploy to an HTTPS Node host/VPS using the instructions below.
@@ -48,6 +50,24 @@ Use an appropriately URL-encoded password in `MONGODB_URI`, with `authSource=lev
 
 Collections: `students`, `classes`, `papers`, `marks`, `administrators`, `auditLogs`, `sessions`. Marks have a unique `(studentId, paperId)` index; administrator usernames and class names are unique. Duplicate student names are allowed and must use distinct class/profile labels. Internal ObjectIds, never names, identify marks.
 
+## Teacher pages
+
+The admin workspace uses separate server-served HTML pages with normal navigation links, rather than in-page tabs. Each address can be opened directly, bookmarked or refreshed:
+
+| Page | URL |
+| --- | --- |
+| Sign in | `/admin/login` |
+| Marks spreadsheet | `/admin/marks` |
+| Student directory | `/admin/students` |
+| Papers and publishing | `/admin/papers` |
+| Classes | `/admin/classes` |
+| Performance | `/admin/performance` |
+| Audit history | `/admin/history` |
+
+`/admin` redirects to the marks page. Logged-out requests redirect to sign-in and return to the requested page after login. Each protected document and API requires the existing administrator session. In-app navigation waits for a pending marks save; failed saves keep the teacher on the sheet to retry. Forms remain on their own page after saving.
+
+The theme uses **#159ED4 → #9D59EB**, with subtle drifting background gradients across student and teacher pages. Background motion stops when reduced motion is preferred. Gradient buttons use dark text to maintain readable contrast across both colors.
+
 ## Teacher workflow
 
 1. Sign in at `/admin`. Create classes, then students; assign a non-sensitive profile label to distinguish duplicate names. Edit a profile to deactivate/reactivate it or set an access code.
@@ -89,7 +109,7 @@ npm audit --omit=dev
 
 Tests launch an isolated real MongoDB process using `mongodb-memory-server`; the first run downloads MongoDB. Browser tests launch their own synthetic-data server at port 3100 and do not touch your configured database. Chromium may need OS libraries (`npx playwright install --with-deps chromium` on supported systems).
 
-Verified in this delivery: **14 API integration tests and 5 Chromium end-to-end tests**, including exact/similar lookup, duplicates, admin auth, CSRF, CRUD, invalid/valid bulk marks, zero/absence/blanks, publishing/unpublishing, ordering, access codes, class boundaries, persistence, rate limits, spinner completion, single/multiple reveals, final celebration, reduced motion, keyboard interactions and mobile layouts. Production dependency audit: **0 reported vulnerabilities** at delivery. See [test report](docs/testing.md).
+Verified in this delivery: **15 API integration tests and 9 Chromium end-to-end tests**, including exact/similar lookup, duplicates, admin auth, CSRF, CRUD, invalid/valid bulk marks, zero/absence/blanks, publishing/unpublishing, ordering, access codes, class boundaries, persistence, rate limits, spinner completion, single/multiple reveals, final celebration, reduced motion, keyboard interactions and mobile layouts. Production dependency audit: **0 reported vulnerabilities** at delivery. See [test report](docs/testing.md).
 
 Screenshots use synthetic students: [welcome](docs/screenshots/welcome.png), [teacher spreadsheet](docs/screenshots/admin.png), [final reveal](docs/screenshots/final-result.png), [mobile](docs/screenshots/mobile.png).
 
@@ -121,6 +141,8 @@ Regularly test `mongorestore` to an **isolated** database/server and verify stud
 ## Source layout
 
 - `server.js`: application factory, MongoDB setup/migrations, sessions, security and APIs.
-- `public/app.js`: student and teacher screens; `sheet.js`: spreadsheet interactions; `reveal.js`: animation and evidence-based messages; `style.css`: responsive design.
+- `public/app.js`: student screens; `public/admin.js`: teacher pages; `public/client.js`: shared API/session and UI helpers.
+- `views/admin/`: separate protected admin HTML documents.
+- `public/sheet.js`: spreadsheet interactions; `public/reveal.js`: animation and evidence-based messages; `public/style.css`: responsive theme and ambient background.
 - `scripts/admin.js`: local administrator provisioning/reset.
 - `tests/`: isolated integration and browser tests; `deploy/`: VPS examples; `docs/`: architecture, verification and screenshots.

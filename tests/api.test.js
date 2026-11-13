@@ -346,6 +346,60 @@ test("class boundaries, paper edit validation and Mongo schema validation", asyn
       .insertOne({ studentId: "invalid", paperId: "invalid", value: -1 }),
   );
 });
+test("admin documents are separate protected pages with safe login redirects", async () => {
+  const pages = [
+    "marks",
+    "students",
+    "papers",
+    "classes",
+    "performance",
+    "history",
+  ];
+  assert.equal(
+    (await publicAgent.get("/admin")).headers.location,
+    "/admin/marks",
+  );
+  for (const page of pages) {
+    const denied = await publicAgent.get("/admin/" + page);
+    assert.equal(denied.status, 302);
+    assert.equal(
+      denied.headers.location,
+      "/admin/login?next=" + encodeURIComponent("/admin/" + page),
+    );
+    const allowed = await admin.get("/admin/" + page);
+    assert.equal(allowed.status, 200);
+    assert.match(allowed.headers["content-type"], /text\/html/);
+    assert.equal(allowed.headers["cache-control"], "no-store");
+    assert.ok(allowed.text.includes('data-admin-page="' + page + '"'));
+    assert.ok(allowed.text.includes('src="/admin.js"'));
+    assert.ok(!allowed.text.includes('src="/app.js"'));
+  }
+  const login = await publicAgent.get("/admin/login");
+  assert.equal(login.status, 200);
+  assert.ok(login.text.includes('data-admin-page="login"'));
+  assert.equal(
+    (
+      await admin.get(
+        "/admin/login?next=" + encodeURIComponent("/admin/students"),
+      )
+    ).headers.location,
+    "/admin/students",
+  );
+  assert.equal(
+    (
+      await admin.get(
+        "/admin/login?next=" + encodeURIComponent("https://example.com/"),
+      )
+    ).headers.location,
+    "/admin/marks",
+  );
+  assert.equal((await publicAgent.get("/admin/unknown")).status, 404);
+  assert.equal((await admin.get("/admin/unknown")).status, 404);
+  assert.equal(
+    (await publicAgent.get("/views/admin/students.html")).status,
+    404,
+  );
+});
 test("session persists in Mongo and logout revokes admin access", async () => {
   assert.ok(
     await db.collection("sessions").findOne({ session: { $regex: "teacher" } }),
