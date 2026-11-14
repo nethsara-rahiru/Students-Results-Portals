@@ -1569,3 +1569,83 @@ test("reduced motion and Skip keep high-score effects static and exact", async (
       ),
   ).toBe(true);
 });
+
+test("spinner colours develop gradually and the glass blast expands beyond the viewport", async ({
+  page,
+}) => {
+  await page.route("**/api/results/*", (route) =>
+    route.fulfill({
+      json: {
+        student: "Single Student",
+        papers: [{ id: "glass", name: "Glass reveal", max: 100, value: 85 }],
+      },
+    }),
+  );
+  await identify(page, "Single Student");
+  await page.getByRole("button", { name: /Glass reveal/ }).click();
+  await expect
+    .poll(() =>
+      page
+        .locator(".score-wash-gold")
+        .evaluate(
+          (n) =>
+            n.getAnimations().filter((a) => !(a instanceof CSSTransition))
+              .length,
+        ),
+    )
+    .toBeGreaterThan(0);
+  const progression = await page.locator(".score-wash-gold").evaluate((n) => {
+    const a = n.getAnimations().find((a) => !(a instanceof CSSTransition)),
+      now = a.currentTime,
+      duration = a.effect.getTiming().duration;
+    a.pause();
+    a.currentTime = duration * 0.2;
+    const early = Number(getComputedStyle(n).opacity);
+    a.currentTime = duration * 0.7;
+    const later = Number(getComputedStyle(n).opacity);
+    a.currentTime = now;
+    a.play();
+    return { early, later };
+  });
+  expect(progression.early).toBeLessThan(0.1);
+  expect(progression.later).toBeGreaterThan(progression.early + 0.2);
+  await expect(page.locator(".student-journey")).toHaveAttribute(
+    "data-complete",
+    "false",
+  );
+  await expect(page.locator("#score")).toHaveAttribute(
+    "aria-label",
+    "Score 85",
+    { timeout: 7000 },
+  );
+  await expect(page.locator("#score")).toHaveCSS("color", "rgb(233, 215, 166)");
+  const glass = page.locator(".score-glass").first();
+  await expect
+    .poll(() => glass.evaluate((n) => n.getAnimations().length))
+    .toBeGreaterThan(0);
+  const size = await glass.evaluate(async (n) => {
+    const a = n.getAnimations()[0];
+    await a.ready;
+    a.pause();
+    await a.ready;
+    a.currentTime = a.effect.getTiming().duration * 0.18;
+    return {
+      width: parseFloat(getComputedStyle(n).width),
+      view: innerWidth,
+      opacity: Number(getComputedStyle(n).opacity),
+    };
+  });
+  expect(size.width).toBeGreaterThan(size.view);
+  expect(size.opacity).toBeGreaterThan(0.2);
+  await page.screenshot({ path: "docs/screenshots/glass-blast.png" });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await expect
+    .poll(() => glass.evaluate((n) => n.getAnimations().length))
+    .toBe(0);
+  await expect(glass).toBeHidden();
+  await page.getByRole("button", { name: "Replay journey" }).click();
+  await expect(page.locator(".student-journey")).not.toHaveAttribute(
+    "data-score-band",
+    /.+/,
+  );
+});

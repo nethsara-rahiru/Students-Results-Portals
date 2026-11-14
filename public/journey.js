@@ -621,6 +621,7 @@ export class StudentJourney {
       this.actions(null);
       this.show("actions", true);
       this.show("skip-score", true);
+      this.scoreEffects.begin(last ? 2900 : 2500);
       this.finishSpin = animateScore(this.node("score"), p.value, {
         reduced: this.media.matches,
         duration: last ? 2900 : 2500,

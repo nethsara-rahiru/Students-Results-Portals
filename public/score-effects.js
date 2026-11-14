@@ -35,7 +35,7 @@ export function scoreProfile(value, max) {
 }
 
 // Persistent visual layers: only their colour/intensity changes between papers.
-// No rings, screen shake, flashing sequence or canvas is used.
+// A temporary glass blast is shown only on qualifying score completion.
 export class ScoreEffects {
   constructor(root, score, media) {
     this.root = root;
@@ -46,7 +46,7 @@ export class ScoreEffects {
     this.layer.className = "score-atmosphere";
     this.layer.setAttribute("aria-hidden", "true");
     this.layer.innerHTML =
-      '<div class="score-wash score-wash-red"></div><div class="score-wash score-wash-gold"></div><div class="score-sweep"></div><div class="score-burst"></div>';
+      '<div class="score-wash score-wash-red"></div><div class="score-wash score-wash-gold"></div><div class="score-suspense"></div><div class="score-sweep"></div><div class="score-burst"><div class="score-glass"></div><div class="score-glass score-glass-echo"></div></div>';
     this.rays = Array.from({ length: 18 }, (_, index) => {
       const ray = document.createElement("i");
       ray.className = "score-ray";
@@ -78,6 +78,42 @@ export class ScoreEffects {
     this.last = last;
     this.root.dataset.scoreBand = this.profile.band;
   }
+  begin(duration) {
+    if (!this.profile || this.media.matches) return;
+    const p = this.profile;
+    const wash = this.layer.querySelector(
+      p.band.startsWith("under-") ? ".score-wash-red" : ".score-wash-gold",
+    );
+    const target =
+      p.band === "under-10"
+        ? 0.92
+        : p.band === "under-20"
+          ? 0.48
+          : p.gold
+            ? 1
+            : 0;
+    // Keep the opening ambiguous, then let the colour develop with the roll.
+    this.animations.push(
+      wash.animate(
+        [
+          { opacity: 0 },
+          { opacity: target * 0.08, offset: 0.3 },
+          { opacity: target * 0.38, offset: 0.65 },
+          { opacity: target },
+        ],
+        { duration, easing: "ease-in-out" },
+      ),
+    );
+    this.suspense = this.layer.querySelector(".score-suspense").animate(
+      [
+        { opacity: 0, transform: "scale(1)" },
+        { opacity: 0.6, transform: "scale(1.12)", offset: 0.45 },
+        { opacity: 0, transform: "scale(1.25)" },
+      ],
+      { duration, easing: "ease-in-out" },
+    );
+    this.animations.push(this.suspense);
+  }
   settle({ skip = false } = {}) {
     if (!this.profile || this.completed) return;
     this.completed = true;
@@ -85,6 +121,7 @@ export class ScoreEffects {
       reduced = this.media.matches || skip;
     this.root.dataset.scoreEffect = p.burst ? "burst" : "gentle";
     this.root.dataset.scoreCelebration = String(p.celebration || this.last);
+    this.suspense?.cancel();
     if (reduced) return;
     if (p.burst) {
       const box = this.score.getBoundingClientRect(),
@@ -92,6 +129,48 @@ export class ScoreEffects {
         burst = this.layer.querySelector(".score-burst");
       burst.style.left = box.left + box.width / 2 - root.left + "px";
       burst.style.top = box.top + box.height / 2 - root.top + "px";
+      // Cover the viewport from the score origin with one translucent bubble.
+      const radius = Math.max(
+        ...[
+          [0, 0],
+          [root.width, 0],
+          [0, root.height],
+          [root.width, root.height],
+        ].map(([x, y]) =>
+          Math.hypot(
+            x - (box.left + box.width / 2 - root.left),
+            y - (box.top + box.height / 2 - root.top),
+          ),
+        ),
+      );
+      burst.style.setProperty("--blast-size", `${Math.ceil(radius * 2.15)}px`);
+      for (const [index, glass] of this.layer
+        .querySelectorAll(".score-glass")
+        .entries()) {
+        this.animations.push(
+          glass.animate(
+            [
+              { opacity: 0, transform: "translate(-50%,-50%) scale(.06)" },
+              {
+                opacity: index ? 0.38 : 0.8,
+                transform: "translate(-50%,-50%) scale(.34)",
+                offset: 0.22,
+              },
+              {
+                opacity: 0.28,
+                transform: "translate(-50%,-50%) scale(.8)",
+                offset: 0.66,
+              },
+              { opacity: 0, transform: "translate(-50%,-50%) scale(1)" },
+            ],
+            {
+              duration: this.last ? 2200 : 1850,
+              delay: index * 140,
+              easing: "cubic-bezier(.12,.58,.23,1)",
+            },
+          ),
+        );
+      }
       const strength = this.last ? 1.2 : 1;
       for (const [index, ray] of this.rays.entries()) {
         const angle = ray.dataset.angle,

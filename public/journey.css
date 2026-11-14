@@ -616,11 +616,10 @@
   .score-wash-red {
   opacity: 0.48;
 }
-.student-journey[data-state="reveal"][data-complete="true"][data-score-band="gold"]
+.student-journey[data-state="reveal"][data-score-band="gold"] .score-wash-gold,
+.student-journey[data-state="reveal"][data-score-band="celebration"]
   .score-wash-gold,
-.student-journey[data-state="reveal"][data-complete="true"][data-score-band="celebration"]
-  .score-wash-gold,
-.student-journey[data-state="reveal"][data-complete="true"][data-score-band="distinction"]
+.student-journey[data-state="reveal"][data-score-band="distinction"]
   .score-wash-gold {
   opacity: 1;
 }
@@ -658,6 +657,65 @@
   }
   .score-ray,
   .score-sweep {
+    display: none !important;
+  }
+}
+
+.score-suspense {
+  position: absolute;
+  inset: -15%;
+  opacity: 0;
+  background:
+    radial-gradient(ellipse at 28% 45%, #159ed438, transparent 65%),
+    radial-gradient(ellipse at 78% 58%, #9d59eb35, transparent 62%);
+}
+.score-glass {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: var(--blast-size, 160vmax);
+  height: var(--blast-size, 160vmax);
+  border-radius: 50%;
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.06);
+  border: 1px solid #e5f7ff66;
+  background:
+    radial-gradient(circle at 32% 24%, #ffffff30, transparent 27%),
+    radial-gradient(
+      circle,
+      transparent 48%,
+      #9d59eb0a 60%,
+      #159ed425 70%,
+      #e5f7ff60 72%,
+      #ffffff0a 74%,
+      transparent 76%
+    );
+  box-shadow:
+    inset 0 0 70px #d9f4ff16,
+    0 0 60px #159ed418;
+}
+.score-glass-echo {
+  border-color: #e9d7a630;
+  filter: blur(2px);
+}
+.student-journey[data-score-band="gold"] .score-glass,
+.student-journey[data-score-band="celebration"] .score-glass,
+.student-journey[data-score-band="distinction"] .score-glass {
+  background:
+    radial-gradient(circle at 32% 24%, #fff6df38, transparent 27%),
+    radial-gradient(
+      circle,
+      transparent 48%,
+      #9d59eb08 60%,
+      #e9d7a626 70%,
+      #fff1c95c 72%,
+      #ffffff0a 74%,
+      transparent 76%
+    );
+}
+@media (prefers-reduced-motion: reduce) {
+  .score-glass,
+  .score-suspense {
     display: none !important;
   }
 }
