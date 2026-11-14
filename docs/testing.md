@@ -62,3 +62,7 @@ Login-rate tests verify that successful teacher sign-ins do not consume the fail
 ## Score-range reveals
 
 33 Node tests and 31 browser tests cover the current update. New unit checks cover exact score boundaries, percentage normalization for different maxima, cumulative effect flags and invalid results. Browser checks exercise deep/soft red backgrounds, a running burst, gold digits, normalized final confetti, persistent atmosphere identity, replay cleanup, a low-score final celebration, live reduced-motion changes, and Skip animation. Existing actual spinner completion, single/multiple-paper ordering, mobile layout, keyboard access, admin, worksheet and publishing regressions remain included. Range screenshots contain synthetic fixture scores only.
+
+## Gradual atmosphere and glass blast
+
+33 Node tests and 32 browser tests include the gradual spinner atmosphere and viewport-sized glass blast. A browser check samples early and late wash opacity while the spinner is still running, verifies that the expanding glass surface exceeds the viewport width, captures `glass-blast.png`, and confirms that a live reduced-motion change cancels and hides the effect. The existing range, replay, exact-score, mobile and admin regressions remain included.
