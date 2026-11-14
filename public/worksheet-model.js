@@ -1,4 +1,4 @@
-import { columnName } from "./formulas.js";
+import { columnName, coordinates, calculator } from "./formulas.js";
 import { rebaseFormula } from "./worksheet-references.js";
 export function worksheetModel(data, space, scope = "all") {
   const students = data.students
@@ -123,3 +123,48 @@ export function worksheetModel(data, space, scope = "all") {
     },
   };
 }
+
+// Unnamed numeric result columns receive a default heading. Text notes and rows
+// below the student roster stay working data; explicit Add column registers even
+// before the first result is entered.
+export function automaticPaperColumns(workbook, model) {
+  const { students, papers, columnKey } = model,
+    groups = new Map(),
+    calculate = calculatorFor(workbook);
+  for (const address of Object.keys(workbook.cells)) {
+    const [r, c] = coordinates(address);
+    if (c <= papers.length || r > students.length) continue;
+    if (!groups.has(c)) groups.set(c, { c, used: false, valid: true });
+    const group = groups.get(c),
+      raw = String(workbook.cells[address] || "").trim();
+    if (r === 0 || !raw) continue;
+    const value = raw.startsWith("=") ? calculate(address) : raw;
+    if (raw.toUpperCase() === "A") group.used = true;
+    else if (
+      typeof value !== "boolean" &&
+      (typeof value === "number" || /^\d+(\.\d+)?$/.test(value)) &&
+      Number.isFinite(Number(value))
+    )
+      group.used = true;
+    else group.valid = false;
+  }
+  for (const c of workbook.registerColumns || [])
+    if (c > papers.length && !groups.has(c))
+      groups.set(c, { c, used: false, valid: true });
+  return [...groups.values()]
+    .filter(
+      (group) =>
+        group.valid &&
+        (group.used || (workbook.registerColumns || []).includes(group.c)),
+    )
+    .sort((a, b) => a.c - b.c)
+    .map(({ c }) => ({
+      c,
+      columnKey: columnKey(c),
+      name:
+        String(workbook.cells[columnName(c) + "1"] || "").trim() ||
+        "Paper " + columnName(c),
+    }));
+}
+const calculatorFor = (workbook) =>
+  calculator(workbook.cells, workbook.rows, workbook.columns);

@@ -81,7 +81,7 @@ function options(classes, selected) {
       .join("")
   );
 }
-function dialog(title, fields, onSubmit) {
+function dialog(title, fields, onSubmit, options = {}) {
   const d = document.createElement("dialog");
   d.innerHTML = `<form class="stack"><div class="dialog-heading"><p class="eyebrow">WORKSPACE DETAILS</p><div class="top"><h2 id="dialog-title">${title}</h2><button type="button" class="secondary" id="close-dialog" aria-label="Close dialog">×</button></div></div>${fields}<p class="form-error" role="alert"></p><div class="dialog-actions"><button type="button" class="secondary" id="cancel-dialog">Cancel</button><button>Save changes</button></div></form>`;
   d.setAttribute("aria-labelledby", "dialog-title");
@@ -97,7 +97,8 @@ function dialog(title, fields, onSubmit) {
     try {
       if (
         (sheet?.isBusy() || sheet?.hasUnsavedChanges()) &&
-        !(await sheet.whenIdle())
+        !(await sheet.whenIdle()) &&
+        !options.savedWorksheetRecovery
       )
         throw Error(
           "The previous marks edit could not be saved. Please retry it first.",
@@ -195,13 +196,9 @@ async function admin() {
   }
   function paperForm(p, create = false, source = null) {
     dialog(
-      source
-        ? "Create calculated paper"
-        : p && !create
-          ? "Edit paper"
-          : "Create paper",
+      source ? "Column settings" : p && !create ? "Edit paper" : "Create paper",
       (source
-        ? '<p class="muted">Convert this working column into a paper. Its student results and formulas are retained. Publish only after reviewing the calculated marks.</p>'
+        ? '<p class="muted">Column name, maximum and publishing settings. Student results are registered automatically; publish only after reviewing the calculated marks.</p>'
         : "") +
         field("Paper name", "name", p?.name || "", "text", "required") +
         `<div class="form-grid">${field("Subject", "subject", p?.subject || "")}${field("Grade", "grade", p?.grade || "")}${field("Paper date", "date", p?.date || "", "date")}${field("Maximum marks", "max", p?.max || 100, "number", 'min="1" max="10000" required')}</div><label>Class<select name="classId" ${source ? "disabled" : ""}>${options(data.classes, p?.classId)}</select></label><label>Publication status<select name="state">${["draft", "published", "unpublished"].map((s) => `<option ${s === (p?.state || "draft") ? "selected" : ""}>${s}</option>`).join("")}</select></label><p class="privacy">Publishing makes entered marks accessible in the configured student access mode. Verify marks before publishing.</p>`,
@@ -224,6 +221,7 @@ async function admin() {
           sessionStorage.setItem("levelup-new-paper", result.id);
         return result;
       },
+      { savedWorksheetRecovery: !!source?.recoverable },
     );
   }
   async function render() {
@@ -235,11 +233,17 @@ async function admin() {
         {
           addStudent: (classId) => studentForm({ classId, active: true }, true),
           addPaper: (classId, source) =>
-            paperForm(
-              { classId, name: source?.name || "", max: source?.max || 100 },
-              true,
-              source,
-            ),
+            source?.paper
+              ? paperForm(source.paper, false)
+              : paperForm(
+                  {
+                    classId,
+                    name: source?.name || "",
+                    max: source?.max || 100,
+                  },
+                  true,
+                  source,
+                ),
         },
       );
     } else if (page === "students") {
