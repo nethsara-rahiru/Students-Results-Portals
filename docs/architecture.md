@@ -2,7 +2,7 @@
 
 The existing branch contains an Express/MongoDB MVP and vanilla browser client. Its name normalization, stable ObjectIds, unique mark index, explicit publication, and single-paper reveal are retained. Missing persistent sessions, CSRF, complete validation, audit history, class management, spreadsheet batching and tests are addressed in this iteration.
 
-The server exposes a factory for isolated integration testing. MongoDB holds students, classes, papers, marks, administrators, auditLogs and sessions. Administrative writes require both an authenticated session and a synchronizer CSRF token. Student result authorization is either explicitly public name-based access or a student-bound session established using an access code. Every result query filters published papers and a single student. Sheet edits validate complete batches before writing; audit records preserve prior/new values. Client formulas calculate only selections and never enter stored marks.
+The server exposes a factory for isolated integration testing. MongoDB holds students, classes, papers, marks, administrators, auditLogs and sessions. Administrative writes require both an authenticated session and a synchronizer CSRF token. Student result authorization is either explicitly public name-based access or a student-bound session established using an access code. Every result query filters published papers and a single student. Sheet edits validate complete batches before writing; audit records preserve prior/new values. Formula results are validated numeric mark values; optional formula text and stable student/paper reference bindings are stored as metadata on mark documents. Public result APIs return only numeric published marks, never formula metadata.
 
 The browser uses a native input grid with range selection, clipboard TSV, undo/redo and keyboard navigation. A shared ordered paper list drives both spreadsheet and reveal. Blank, absent and numeric zero are distinct.
 
@@ -21,3 +21,12 @@ CSS theme tokens define the cyan/purple gradient and accessible lighter accents.
 `JourneyAccent` interpolates a straight SVG underline into the rectangular paper frame and back. The orbital/circular artwork and WebGL renderer are removed. A centered welcome and unframed score keep the focus on the student and marks, while the same scene nodes and transform transitions remain. The bundled variable font is local and licensed.
 
 Score reels start during the graphic morph, are reused on subsequent papers, settle at the exact database value, and expose a cancellable completion handle. Skip/reduced-motion changes are coordinated with layout completion so an old callback cannot reveal the wrong paper or duplicate a celebration. Summary/replay reuse the same scene. All authentication, publication and ordering decisions remain in the existing MongoDB APIs.
+
+
+## Unified class worksheet
+
+`marks-workbook.js` derives the single visible worksheet from active student IDs, ordered paper IDs and actual mark documents. Row 1 and column A are protected identity/metadata cells. The Name header owns a class dropdown; changing class rebuilds the roster and applicable papers after waiting for pending saves. Class-specific paper cells are read-only for incompatible students in the all-students view. New row/column actions use existing student/paper dialogs and default to the selected class.
+
+`workbook.js` provides the formula bar, selection, clipboard, fill and history. Its configured save adapter evaluates mark cells, validates the entire recalculated set locally, and sends changed marks to the existing server-validated marks API. Formula text is optional data, not executable code. `worksheet-references.js` binds cell references to student/paper IDs and rebases their display coordinates when rows or columns move. Missing references report errors rather than silently pointing at another student. Marks keep existing last-write-wins behavior; recalculation occurs in the open worksheet on edits, not as a server background job.
+
+Standalone workbooks from the previous UI remain preserved in their MongoDB collection/API. They are not merged into real marks implicitly. The old separate marks grid and worksheet tabs are no longer mounted.

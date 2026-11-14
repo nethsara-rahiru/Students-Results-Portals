@@ -1,4 +1,4 @@
-import { api, notify } from "./client.js";
+import { api, esc, notify } from "./client.js";
 import {
   calculator,
   columnName,
@@ -6,8 +6,12 @@ import {
   shiftFormula,
 } from "./formulas.js";
 
-export async function mountWorkbook(host, data) {
-  let state = await api("/admin/workbook");
+export async function mountWorkbook(host, data, config = {}) {
+  const bound = !!config.state;
+  const editable = (r, c) => (config.editable ? config.editable(r, c) : true);
+  let state = config.state
+    ? structuredClone(config.state)
+    : await api("/admin/workbook");
   let selected = [0, 0],
     anchor = [0, 0],
     busy = false,
@@ -23,6 +27,40 @@ export async function mountWorkbook(host, data) {
       cells: state.cells,
     });
   host.innerHTML = `<div class="workbook-ribbon"><div><strong>Worksheet</strong><small>Private teacher calculations · saved to MongoDB</small></div><button data-action="add-row" class="secondary">Add row</button><button data-action="add-column" class="secondary">Add column</button><button data-action="insert-row" class="secondary">Insert row above</button><button data-action="insert-column" class="secondary">Insert column before</button><button data-action="delete-row" class="secondary">Delete row</button><button data-action="delete-column" class="secondary">Delete column</button><button data-action="undo" class="secondary">Undo</button><button data-action="redo" class="secondary">Redo</button><button data-action="fill" class="secondary">Fill down</button><button data-action="import" class="secondary">Load marks snapshot</button><button data-action="retry" class="secondary">Retry save</button></div><div class="formula-bar"><output id="cell-address">A1</output><label>fx<input aria-label="Cell formula or value" autocomplete="off" placeholder="Type a value or =SUM(A1:A5)"></label></div><p class="workbook-status" role="status">All changes saved</p><div class="sheet workbook-grid" tabindex="0" aria-label="Flexible worksheet"></div><p class="workbook-selection" role="status"></p><details class="keyboard-guide"><summary>Worksheet help & supported formulas</summary><p>Click a cell to select it; double-click or use the formula bar to edit. Shift + click / arrows selects a range. Tab and Enter navigate. Copy/paste TSV from Excel, Delete clears, Ctrl/⌘ + D fills down, Ctrl/⌘ + Z / Y undoes/redoes. Rows and columns can be inserted or deleted at the selected cell. Fill down adjusts relative references and preserves $ anchors.</p><p>Functions: SUM, AVERAGE, MIN, MAX, COUNT, COUNTA, ROUND, ABS, IF, AND, OR, NOT. Supports A1 references, ranges, arithmetic, comparisons, percentages and text literals. This is a supported subset of Excel, without macros, external links or XLSX files. IF arguments are evaluated eagerly. Limits: 500 rows, 100 columns and 10,000 cells. Loading marks replaces this worksheet after confirmation; calculations never publish results automatically.</p></details>`;
+  if (bound) {
+    host.classList.add("marks-bound-workbook");
+    host.querySelector(".workbook-ribbon strong").textContent =
+      "Flexible worksheet";
+    host.querySelector(".workbook-ribbon small").textContent =
+      "Actual student marks · autosaved";
+    for (const action of [
+      "insert-row",
+      "insert-column",
+      "delete-row",
+      "delete-column",
+      "import",
+    ])
+      host.querySelector(`[data-action="${action}"]`).remove();
+    host.querySelector('[data-action="add-row"]').textContent =
+      "Add student row";
+    host.querySelector('[data-action="add-column"]').textContent =
+      "Add paper column";
+    const help = host.querySelector(".keyboard-guide");
+    help.querySelector("p").textContent =
+      "Column A contains student names; row 1 contains paper headers. Use the dropdown beside Name to load a class. Add student row and Add paper column create real profiles and draft papers. Names and headers are protected; edit them from Students and Papers. Shift + click / arrows selects a range; copy/paste, Delete, fill down, undo and redo work on mark cells. A = absent; blank = no result; zero is a valid mark.";
+    help.querySelectorAll("p")[1].textContent =
+      "Functions: SUM, AVERAGE, MIN, MAX, COUNT, COUNTA, ROUND, ABS, IF, AND, OR, NOT. Formulas recalculate in this worksheet and save validated numeric marks plus their formula. Use ROUND to keep at most two decimals. Formula references follow student and paper IDs when switching classes or when rows move; a missing reference shows #REF!. Publishing is managed separately in Papers. The supported Excel subset does not include macros or XLSX import/export; IF arguments evaluate eagerly.";
+    const caption = document.createElement("p");
+    caption.className = "worksheet-context";
+    caption.textContent = config.caption;
+    host.querySelector(".formula-bar").before(caption);
+    if (config.emptyMessage) {
+      const empty = document.createElement("p");
+      empty.className = "worksheet-empty";
+      empty.textContent = config.emptyMessage;
+      host.querySelector(".formula-bar").before(empty);
+    }
+  }
   const grid = host.querySelector(".workbook-grid"),
     bar = host.querySelector(".formula-bar input"),
     status = host.querySelector(".workbook-status");
@@ -53,7 +91,7 @@ export async function mountWorkbook(host, data) {
       for (let c = 0; c < state.columns; c++) {
         const el = inputs[r][c],
           raw = state.cells[ref(r, c)] || "",
-          value = calc(ref(r, c));
+          value = bound && (r === 0 || c === 0) ? raw : calc(ref(r, c));
         if (document.activeElement !== el) el.value = String(value);
         el.classList.toggle("formula-cell", raw.startsWith("="));
         el.classList.toggle(
@@ -61,7 +99,7 @@ export async function mountWorkbook(host, data) {
           raw.startsWith("=") && String(value).startsWith("#"),
         );
         el.classList.remove("selected");
-        el.title = raw.startsWith("=") ? raw : "";
+        el.title = raw.startsWith("=") || !editable(r, c) ? raw : "";
       }
     for (const [r, c] of selection()) {
       inputs[r][c].classList.add("selected");
@@ -70,6 +108,7 @@ export async function mountWorkbook(host, data) {
     }
     host.querySelector("#cell-address").textContent = ref(...selected);
     bar.value = state.cells[ref(...selected)] || "";
+    bar.readOnly = !editable(...selected);
     const sum = nums.reduce((a, b) => a + b, 0);
     host.querySelector(".workbook-selection").textContent =
       `${selection().length} selected · COUNT ${nums.length} · SUM ${Number(sum.toFixed(6))} · AVERAGE ${nums.length ? Number((sum / nums.length).toFixed(6)) : "—"}`;
@@ -128,6 +167,11 @@ export async function mountWorkbook(host, data) {
         const input = document.createElement("input");
         input.setAttribute("aria-label", ref(r, c));
         input.autocomplete = "off";
+        input.readOnly = !editable(r, c);
+        if (bound && c > 0 && r > 0 && !editable(r, c)) {
+          input.classList.add("unavailable-cell");
+          input.title = "No student/paper match in this class";
+        }
         input.spellcheck = false;
         input.onpointerdown = (e) => {
           if (busy) return;
@@ -138,12 +182,33 @@ export async function mountWorkbook(host, data) {
           paint();
         };
         input.ondblclick = () => {
+          if (!editable(r, c)) return;
           input.value = state.cells[ref(r, c)] || "";
           input.select();
         };
         input.onchange = () => change(() => set(r, c, input.value));
         input.onkeydown = (e) => navigate(e, r, c);
-        row.insertCell().append(input);
+        const td = row.insertCell();
+        td.append(input);
+        if (bound && r === 0 && c === 0) {
+          td.className = "name-heading";
+          const picker = document.createElement("details");
+          picker.className = "class-heading-picker";
+          picker.innerHTML = `<summary aria-label="Choose class" title="Choose class">▾</summary><div class="class-picker-panel"><label>Class<select aria-label="Select class"><option value="">All students</option><option value="unassigned">Students without a class</option>${config.classes.map((cls) => `<option value="${esc(cls._id)}">${esc(cls.name)}</option>`).join("")}</select></label><p>Students and their marks load automatically.</p></div>`;
+          const select = picker.querySelector("select");
+          select.value = config.classId;
+          select.onchange = async () => {
+            const previous = config.classId;
+            select.disabled = true;
+            const success = await config.onClassChange(select.value);
+            if (!success) {
+              select.value = previous;
+              select.disabled = false;
+            }
+          };
+          td.append(picker);
+          input.setAttribute("aria-label", "Name header");
+        }
         inputs[r][c] = input;
       }
     }
@@ -153,6 +218,13 @@ export async function mountWorkbook(host, data) {
     paint();
   }
   function set(r, c, value) {
+    if (!editable(r, c)) {
+      if (value !== (state.cells[ref(r, c)] || ""))
+        throw Error(
+          "Student names and paper headers are protected. Paste marks starting at column B, row 2.",
+        );
+      return;
+    }
     if (value.length > 1000)
       throw Error("Cell text is limited to 1,000 characters");
     const address = ref(r, c);
@@ -165,16 +237,18 @@ export async function mountWorkbook(host, data) {
     message("Saving…");
     host.querySelectorAll("button,input").forEach((el) => (el.disabled = true));
     try {
-      const result = await api(
-        "/admin/workbook",
-        {
-          rows: state.rows,
-          columns: state.columns,
-          cells: state.cells,
-          revision: state.revision,
-        },
-        "PUT",
-      );
+      const result = config.save
+        ? await config.save(state)
+        : await api(
+            "/admin/workbook",
+            {
+              rows: state.rows,
+              columns: state.columns,
+              cells: state.cells,
+              revision: state.revision,
+            },
+            "PUT",
+          );
       state.revision = result.revision;
       dirty = false;
       message("All changes saved");
@@ -254,7 +328,7 @@ export async function mountWorkbook(host, data) {
     const [top] = bounds();
     change(() => {
       for (const [r, c] of selection())
-        if (r !== top)
+        if (r !== top && editable(r, c))
           set(r, c, shiftFormula(state.cells[ref(top, c)] || "", r - top, 0));
     });
   }
@@ -278,7 +352,11 @@ export async function mountWorkbook(host, data) {
     }
     if (e.key === "Delete") {
       e.preventDefault();
-      change(() => selection().forEach(([r, c]) => set(r, c, "")));
+      change(() =>
+        selection()
+          .filter(([r, c]) => editable(r, c))
+          .forEach(([r, c]) => set(r, c, "")),
+      );
       return;
     }
     if (e.key === "F2") {
@@ -341,8 +419,14 @@ export async function mountWorkbook(host, data) {
   host.querySelector(".workbook-ribbon").onclick = (e) => {
     const action = e.target.closest("button")?.dataset.action;
     if (!action || busy) return;
-    if (action === "add-row") structure(0, state.rows, 1);
-    if (action === "add-column") structure(1, state.columns, 1);
+    if (action === "add-row") {
+      if (bound) config.addStudent?.();
+      else structure(0, state.rows, 1);
+    }
+    if (action === "add-column") {
+      if (bound) config.addPaper?.();
+      else structure(1, state.columns, 1);
+    }
     if (action === "insert-row") structure(0, selected[0], 1);
     if (action === "insert-column") structure(1, selected[1], 1);
     if (action === "delete-row" || action === "delete-column") {
@@ -462,6 +546,15 @@ export async function mountWorkbook(host, data) {
       return;
     }
     change(() => {
+      if (
+        bound &&
+        (selected[0] + lines.length > state.rows ||
+          selected[1] + Math.max(...lines.map((row) => row.length)) >
+            state.columns)
+      )
+        throw Error(
+          "Paste exceeds this class worksheet. Add student rows or paper columns first.",
+        );
       const height = selected[0] + lines.length,
         width = selected[1] + Math.max(...lines.map((x) => x.length));
       state.rows = Math.max(state.rows, height);

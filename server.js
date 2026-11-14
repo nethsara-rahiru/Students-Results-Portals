@@ -536,6 +536,24 @@ export async function createApp({ db, client, config = {} }) {
         paperId: id,
         value: z.number().finite().min(0).nullable().optional(),
         status: z.enum(["present", "absent"]).default("present"),
+        formula: z
+          .string()
+          .max(1000)
+          .refine(
+            (value) => !value || value.startsWith("="),
+            "Formula must begin with =",
+          )
+          .default(""),
+        formulaBindings: z
+          .array(
+            z.object({
+              ref: z.string().regex(/^[A-Z]{1,3}[1-9]\d{0,6}$/),
+              studentId: id.nullable(),
+              paperId: id.nullable(),
+            }),
+          )
+          .max(200)
+          .default([]),
       });
       const entries = z
         .array(entry)
@@ -576,6 +594,8 @@ export async function createApp({ db, client, config = {} }) {
           after: {
             value,
             status: e.status,
+            formula: e.formula,
+            formulaBindings: e.formula ? e.formulaBindings : [],
             updatedAt: new Date(),
             updatedBy: req.session.admin,
           },
@@ -600,7 +620,12 @@ export async function createApp({ db, client, config = {} }) {
           studentId: e.filter.studentId,
           paperId: e.filter.paperId,
           before: e.before
-            ? { value: e.before.value, status: e.before.status }
+            ? {
+                value: e.before.value,
+                status: e.before.status,
+                formula: e.before.formula || "",
+                formulaBindings: e.before.formulaBindings || [],
+              }
             : null,
           after: e.after,
         })),

@@ -961,3 +961,112 @@ body[data-admin-page="marks"] .workspace {
   transform: none;
   background: #354b6b;
 }
+.marks-bound-workbook .workbook-grid tbody tr:first-child td {
+  position: sticky;
+  top: 39px;
+  z-index: 4;
+  background: #223149;
+}
+.marks-bound-workbook .workbook-grid tbody tr:first-child input {
+  background: #223149;
+  font-weight: 700;
+  color: #dbe8ff;
+  min-width: 180px;
+}
+.marks-bound-workbook .workbook-grid tbody td:nth-child(2) {
+  position: sticky;
+  left: 43px;
+  z-index: 3;
+  background: #1b2a40;
+  min-width: 230px;
+}
+.marks-bound-workbook .workbook-grid tbody td:nth-child(2) input {
+  width: 230px;
+  background: #1b2a40;
+  text-align: left;
+}
+.marks-bound-workbook .workbook-grid tbody tr:first-child td:nth-child(2) {
+  z-index: 6;
+}
+.marks-bound-workbook .workbook-grid tbody td input {
+  width: 180px;
+}
+.marks-bound-workbook .name-heading {
+  position: relative;
+}
+.name-heading > input {
+  padding-right: 38px !important;
+}
+.class-heading-picker {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+}
+.class-heading-picker summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 3px 8px;
+  color: #a6e5fb;
+  font-size: 18px;
+  border: 1px solid #536d96;
+  border-radius: 5px;
+}
+.class-heading-picker summary::-webkit-details-marker {
+  display: none;
+}
+.class-picker-panel {
+  position: absolute;
+  left: -190px;
+  top: 35px;
+  width: 260px;
+  padding: 18px;
+  background: #17263c;
+  border: 1px solid #55719c;
+  box-shadow: 0 12px 30px #0008;
+  border-radius: 9px;
+  z-index: 15;
+}
+.class-picker-panel label {
+  font-size: 11px;
+}
+.class-picker-panel p {
+  font-size: 10px;
+  color: #abbdd7;
+  margin-bottom: 0;
+}
+.marks-bound-workbook .unavailable-cell {
+  color: #7f8ba1;
+  background: #101724 !important;
+}
+.worksheet-empty {
+  font-size: 12px;
+  color: #b6cce6;
+  padding: 16px;
+  border: 1px dashed #426080;
+  border-radius: 8px;
+}
+.marks-bound-workbook .workbook-grid {
+  min-height: 340px;
+}
+.marks-bound-workbook .workbook-grid input[readonly] {
+  cursor: default;
+}
+@media (max-width: 760px) {
+  .marks-bound-workbook .workbook-grid tbody td:nth-child(2),
+  .marks-bound-workbook .workbook-grid tbody td:nth-child(2) input {
+    min-width: 170px;
+    width: 170px;
+  }
+  .class-picker-panel {
+    left: -145px;
+    width: 220px;
+  }
+}
+.worksheet-context {
+  font-size: 12px;
+  color: #a6ddf1;
+  padding: 10px 14px;
+  border-left: 2px solid #159ed4;
+  background: #159ed40c;
+  margin: 4px 0 18px;
+}
