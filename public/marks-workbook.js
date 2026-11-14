@@ -1,4 +1,4 @@
-import { worksheetModel } from "./worksheet-model.js";
+import { worksheetModel, automaticPaperColumns } from "./worksheet-model.js";
 import { api, notify } from "./client.js";
 import { mountWorkbook } from "./workbook.js";
 import { calculator, columnName, coordinates } from "./formulas.js";
@@ -48,12 +48,9 @@ export async function mountMarksWorkbook(
       const extraMap = new Map(
         space.cells.map((cell) => [cell.rowKey + ":" + cell.columnKey, cell]),
       );
+      const recoverableColumns = new Set();
       const editable = (r, c) => {
-        if (
-          (r === 0 && c <= papers.length) ||
-          (c === 0 && r <= students.length)
-        )
-          return false;
+        if (c === 0 && r <= students.length) return false;
         return (
           !isMark(r, c) ||
           !papers[c - 1].classId ||
@@ -69,19 +66,55 @@ export async function mountMarksWorkbook(
         caption: `${next === "unassigned" ? "Students without a class" : data.classes.find((cls) => cls._id === next)?.name || "All students"} · ${students.length} students · ${papers.length} papers · Working rows and columns grow as needed`,
         addStudent: () => addStudent?.(next === "unassigned" ? "" : next),
         addPaper: () => addPaper?.(next === "unassigned" ? "" : next),
-        canConvert: (c) =>
-          c > papers.length ||
-          (papers[c - 1]?.worksheetSource?.scope === scope &&
-            !papers[c - 1].worksheetImportComplete),
+        canConvert: (c) => c > 0,
         convertColumn: (c, name) => {
-          const paper = papers[c - 1],
-            source = paper?.worksheetSource;
+          const paper = papers[c - 1];
+          if (paper && paper.worksheetImportComplete !== false) {
+            addPaper?.(next === "unassigned" ? "" : next, { paper });
+            return;
+          }
+          const source = paper?.worksheetSource;
           addPaper?.(next === "unassigned" ? "" : next, {
             scope: source?.scope || scope,
             columnKey: source?.columnKey || columnKey(c),
             name: paper?.name || name || "Final marks",
             max: paper?.max || 100,
+            recoverable: recoverableColumns.has(
+              source?.columnKey || columnKey(c),
+            ),
           });
+        },
+        nextColumn: (workbook) => {
+          const used = new Set(
+            Object.keys(workbook.cells).map((address) => {
+              const [r, c] = coordinates(address);
+              return r <= students.length && workbook.cells[address] !== ""
+                ? c
+                : -1;
+            }),
+          );
+          let c = papers.length + 1;
+          while (used.has(c)) c++;
+          return c;
+        },
+        nextPaperName: () =>
+          "Paper " + String(data.papers.length + 1).padStart(2, "0"),
+        onRefresh: async (result) => {
+          if (classId !== next) return;
+          if (await load(next)) {
+            const fresh = data.papers.filter(
+                (p) => !next || !p.classId || p.classId === next,
+              ),
+              c = fresh.findIndex((p) => p._id === result.paperId) + 1;
+            if (c > 0)
+              controller.reveal(
+                result.rename ? 0 : Math.max(1, result.row || 1),
+                c,
+                result.rename,
+              );
+            return true;
+          }
+          return false;
         },
         classes: data.classes,
         classId: next,
@@ -92,6 +125,31 @@ export async function mountMarksWorkbook(
             ? "No papers yet. Add a paper column or use the blank working columns."
             : "",
         save: async (workbook) => {
+          recoverableColumns.clear();
+          for (let c = 1; c <= papers.length; c++) {
+            const paper = papers[c - 1],
+              name = String(workbook.cells[columnName(c) + "1"] || "").trim();
+            if (!name || name.length > 120 || name.startsWith("="))
+              throw Error(
+                "Give every paper column a text heading (1–120 characters).",
+              );
+            if (name !== paper.name) {
+              await api(
+                "/admin/papers/" + paper._id,
+                {
+                  name,
+                  max: paper.max,
+                  classId: paper.classId || null,
+                  subject: paper.subject || "",
+                  grade: paper.grade || "",
+                  date: paper.date || "",
+                  state: paper.state,
+                },
+                "PATCH",
+              );
+              paper.name = name;
+            }
+          }
           const calculate = calculator(
               workbook.cells,
               workbook.rows,
@@ -166,7 +224,12 @@ export async function mountMarksWorkbook(
           const pendingExtras = new Map();
           for (const [address, value] of Object.entries(workbook.cells)) {
             const [r, c] = coordinates(address);
-            if (isMark(r, c) || !editable(r, c)) continue;
+            if (
+              isMark(r, c) ||
+              (r === 0 && c <= papers.length) ||
+              !editable(r, c)
+            )
+              continue;
             const cell = {
               rowKey: rowKey(r),
               columnKey: columnKey(c),
@@ -256,6 +319,43 @@ export async function mountMarksWorkbook(
               else extraMap.set(key, cell);
             }
           });
+          const automatic = automaticPaperColumns(workbook, model);
+          const incomplete = papers
+            .filter(
+              (p) =>
+                p.worksheetSource?.scope === scope &&
+                !p.worksheetImportComplete,
+            )
+            .map((p) => ({
+              columnKey: p.worksheetSource.columnKey,
+              name: p.name,
+              max: p.max,
+            }));
+          let created;
+          for (const column of [...incomplete, ...automatic]) {
+            try {
+              created = await api("/admin/worksheet-paper", {
+                scope,
+                columnKey: column.columnKey,
+                name: column.name,
+                max: column.max || 100,
+                state: "draft",
+              });
+            } catch (error) {
+              recoverableColumns.add(column.columnKey);
+              throw error;
+            }
+          }
+          if (created) {
+            Object.assign(data, await api("/admin/data"));
+            return {
+              revision: workbook.revision + 1,
+              refresh: true,
+              paperId: created.id,
+              row: workbook.selection?.[0] || 1,
+              rename: !!workbook.registerColumns?.length,
+            };
+          }
           return { revision: workbook.revision + 1 };
         },
       });
@@ -271,6 +371,14 @@ export async function mountMarksWorkbook(
         sessionStorage.removeItem("levelup-new-paper");
       }
       classId = next;
+      if (
+        automaticPaperColumns(state, model).length ||
+        papers.some(
+          (p) =>
+            p.worksheetSource?.scope === scope && !p.worksheetImportComplete,
+        )
+      )
+        await controller.flush();
       sessionStorage.setItem("levelup-admin-class", next);
       return true;
     } catch (error) {

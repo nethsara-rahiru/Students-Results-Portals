@@ -53,3 +53,8 @@ Login-rate tests verify that successful teacher sign-ins do not consume the fail
 ## Calculated papers and point-and-click formulas
 
 29 Node tests (20 API tests and nine formula/model tests) and 27 browser tests cover the current update. New checks validate idempotent column promotion, server-calculated averages, draft/publish/unpublish visibility, invalid-result rejection before paper creation, formula metadata privacy, stable aliases, formula-only function suggestions, keyboard completion, bare-equals cell picking, range references, formula-bar input, Escape cancellation, and editing after reopening a very large sparse worksheet. Browser coverage also checks parent-mark edits recalculating the published final result, its full student reveal/celebration through the actual result API, and Add column creating a real paper. Fixtures remain isolated and synthetic.
+
+
+## No-form automatic columns
+
+30 Node tests (20 API tests and ten formula/model tests) and 28 browser tests cover this update. Add column and spare numeric/formula columns register as draft papers without a creation dialog; headings edit inline and class assignments persist. Tests retain the published average's real student journey, function completion, clicked references, large sparse sheets, and failed-save protection. Additional checks distinguish notes/spare rows from actual result columns and recover a non-default maximum through optional settings without discarding saved inputs.

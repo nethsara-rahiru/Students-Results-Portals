@@ -9,6 +9,7 @@ import {
 
 export async function mountWorkbook(host, data, config = {}) {
   const bound = !!config.state;
+  if (bound) host.dataset.paperCount = String(config.paperCount);
   const editable = (r, c) => (config.editable ? config.editable(r, c) : true);
   let state = config.state
     ? structuredClone(config.state)
@@ -16,6 +17,7 @@ export async function mountWorkbook(host, data, config = {}) {
   let selected = [0, 0],
     anchor = [0, 0],
     busy = false,
+    refreshing = false,
     dirty = false,
     undo = [],
     redo = [],
@@ -26,6 +28,7 @@ export async function mountWorkbook(host, data, config = {}) {
       rows: state.rows,
       columns: state.columns,
       cells: state.cells,
+      registerColumns: state.registerColumns || [],
     });
   host.innerHTML = `<div class="workbook-ribbon"><div><strong>Worksheet</strong><small>Private teacher calculations · saved to MongoDB</small></div><button data-action="add-row" class="secondary">Add row</button><button data-action="add-column" class="secondary">Add column</button><button data-action="insert-row" class="secondary">Insert row above</button><button data-action="insert-column" class="secondary">Insert column before</button><button data-action="delete-row" class="secondary">Delete row</button><button data-action="delete-column" class="secondary">Delete column</button><button data-action="undo" class="secondary">Undo</button><button data-action="redo" class="secondary">Redo</button><button data-action="fill" class="secondary">Fill down</button><button data-action="import" class="secondary">Load marks snapshot</button><button data-action="retry" class="secondary">Retry save</button></div><div class="formula-bar"><input id="cell-address" aria-label="Go to cell" value="A1" title="Enter an address and press Enter to jump or extend the sheet"><label>fx<input aria-label="Cell formula or value" autocomplete="off" placeholder="Type a value or =SUM(A1:A5)"></label></div><p class="workbook-status" role="status">All changes saved</p><div class="sheet workbook-grid" tabindex="0" aria-label="Flexible worksheet"></div><p class="workbook-selection" role="status"></p><details class="keyboard-guide"><summary>Worksheet help & supported formulas</summary><p>Click a cell to select it; double-click or use the formula bar to edit. Shift + click / arrows selects a range. Tab and Enter navigate. Copy/paste TSV from Excel, Delete clears, Ctrl/⌘ + D fills down, Ctrl/⌘ + Z / Y undoes/redoes. Rows and columns can be inserted or deleted at the selected cell. Fill down adjusts relative references and preserves $ anchors.</p><p>Functions: SUM, AVERAGE, MIN, MAX, COUNT, COUNTA, ROUND, ABS, IF, AND, OR, NOT. Supports A1 references, ranges, arithmetic, comparisons, percentages and text literals. This is a supported subset of Excel, without macros, external links or XLSX files. IF arguments are evaluated eagerly. Limits: 500 rows, 100 columns and 10,000 cells. Loading marks replaces this worksheet after confirmation; calculations never publish results automatically.</p></details>`;
   if (bound) {
@@ -48,7 +51,7 @@ export async function mountWorkbook(host, data, config = {}) {
     if (config.expandable) {
       for (const [action, label] of [
         ["working-row", "Add row"],
-        ["working-column", "Add working column"],
+        ["working-column", "Add blank column"],
       ]) {
         const button = document.createElement("button");
         button.className = "secondary";
@@ -59,7 +62,7 @@ export async function mountWorkbook(host, data, config = {}) {
     }
     const help = host.querySelector(".keyboard-guide");
     help.querySelector("p").textContent =
-      "Column A contains student names; row 1 contains paper headers. Add column creates a paper, including calculated final marks. Add row/Add working column creates private working space; paste expands it automatically. Use Make column a paper to promote an existing working column. Enter any cell address in the address box and press Enter to jump or expand. Large sheets render a scrolling window. Working cells stay private to teachers and can feed formulas in real mark cells. Use the dropdown beside Name to load a class. Add student row and Add paper column create real profiles and draft papers. Names and headers are protected; edit them from Students and Papers. Shift + click / arrows selects a range; copy/paste, Delete, fill down, undo and redo work on mark cells. A = absent; blank = no result; zero is a valid mark.";
+      "Column A contains student names; row 1 contains paper headers. Add column inserts a paper column immediately; edit its heading directly. Add row/Add blank column adds spare space; paste expands it automatically. New result columns register as papers automatically when named with Add column or used for student marks. No separate creation or conversion form is needed. Enter any cell address in the address box and press Enter to jump or expand. Large sheets render a scrolling window. Working cells stay private to teachers and can feed formulas in real mark cells. Use the dropdown beside Name to load a class. Add student row creates real profiles. Result columns register automatically and stay draft until published. Student names are protected. Paper headings can be edited directly; optional column settings control maxima and publishing. Shift + click / arrows selects a range; copy/paste, Delete, fill down, undo and redo work on mark cells. A = absent; blank = no result; zero is a valid mark.";
     help.querySelectorAll("p")[1].textContent =
       "Functions: SUM, AVERAGE, MIN, MAX, COUNT, COUNTA, ROUND, ABS, IF, AND, OR, NOT. Formulas recalculate in this worksheet and save validated numeric marks plus their formula. Use ROUND to keep at most two decimals. Formula references follow student and paper IDs when switching classes or when rows move; a missing reference shows #REF!. Publishing is managed separately in Papers. The supported Excel subset does not include macros or XLSX import/export; IF arguments evaluate eagerly.";
     const caption = document.createElement("p");
@@ -344,6 +347,7 @@ export async function mountWorkbook(host, data, config = {}) {
         input.setAttribute("aria-label", ref(r, c));
         input.autocomplete = "off";
         input.readOnly = !editable(r, c);
+        input.disabled = busy || refreshing;
         if (
           config.expandable &&
           (r > config.studentCount || c > config.paperCount)
@@ -391,9 +395,9 @@ export async function mountWorkbook(host, data, config = {}) {
             '<svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19 19 5M6 5h13v13" fill="none" stroke="currentColor" stroke-width="2"/></svg>';
           convert.setAttribute(
             "aria-label",
-            "Make column " + columnName(c) + " a paper",
+            "Settings for column " + columnName(c),
           );
-          convert.title = "Use this column as a paper";
+          convert.title = "Column settings";
           convert.onclick = () =>
             config.convertColumn(c, state.cells[ref(0, c)] || "");
           td.append(convert);
@@ -499,13 +503,14 @@ export async function mountWorkbook(host, data, config = {}) {
     else state.cells[address] = value;
   }
   async function persist() {
+    let result;
     busy = true;
     dirty = true;
     message("Saving…");
     host.querySelectorAll("button,input").forEach((el) => (el.disabled = true));
     try {
-      const result = config.save
-        ? await config.save(state)
+      result = config.save
+        ? await config.save({ ...state, selection: [...selected] })
         : await api(
             "/admin/workbook",
             {
@@ -529,10 +534,33 @@ export async function mountWorkbook(host, data, config = {}) {
       return false;
     } finally {
       busy = false;
-      host
-        .querySelectorAll("button,input")
-        .forEach((el) => (el.disabled = false));
-      paint();
+      if (result?.refresh) {
+        refreshing = true;
+        message("Updating columns…");
+        setTimeout(async () => {
+          try {
+            const loaded = await config.onRefresh?.(result);
+            if (loaded === false) throw Error("Reload required");
+          } catch {
+            message(
+              "Your changes are saved. Reload the worksheet to display the new columns.",
+              true,
+            );
+            const reload = document.createElement("button");
+            reload.className = "secondary";
+            reload.textContent = "Reload worksheet";
+            reload.onclick = () => location.reload();
+            status.after(reload);
+          } finally {
+            refreshing = false;
+          }
+        }, 0);
+      } else {
+        host
+          .querySelectorAll("button,input")
+          .forEach((el) => (el.disabled = false));
+        paint();
+      }
     }
   }
   function change(fn) {
@@ -738,8 +766,15 @@ export async function mountWorkbook(host, data, config = {}) {
       else structure(0, state.rows, 1);
     }
     if (action === "add-column") {
-      if (bound) config.addPaper?.();
-      else structure(1, state.columns, 1);
+      if (bound) {
+        change(() => {
+          const c = config.nextColumn?.(state) ?? state.columns;
+          state.columns = Math.max(state.columns, c + 1);
+          state.cells[ref(0, c)] =
+            config.nextPaperName?.() || "Paper " + columnName(c);
+          state.registerColumns = [...(state.registerColumns || []), c];
+        });
+      } else structure(1, state.columns, 1);
     }
     if (action === "insert-row") structure(0, selected[0], 1);
     if (action === "insert-column") structure(1, selected[1], 1);
@@ -895,16 +930,22 @@ export async function mountWorkbook(host, data, config = {}) {
   });
   render();
   return {
-    reveal: (r, c) => {
+    reveal: (r, c, selectText = false) => {
       select(r, c);
       focusCell(r, c);
+      if (selectText) inputs[r]?.[c]?.select();
     },
-    isBusy: () => busy,
+    flush: () => {
+      idle = persist();
+      return idle;
+    },
+    isBusy: () => busy || refreshing,
     whenIdle: () => idle,
     hasUnsavedChanges: () => {
       if (
         formulaUI.dirty() ||
         busy ||
+        refreshing ||
         dirty ||
         bar.value !== (state.cells[ref(...selected)] || "")
       )

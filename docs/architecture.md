@@ -46,3 +46,10 @@ Add column now uses the real paper-creation workflow. Private scratch columns ar
 `worksheet-model.js` is shared by server and browser. Promoted source slots alias their new paper IDs, preserving older formula references, working-row notes, and worksheet dimensions without a duplicate source column. Paper records retain source metadata through ordinary metadata/publication edits.
 
 `formula-entry.js` manages a draft independently of saved cells. Function suggestions are formula-only and support keyboard selection. Pointer selection inserts references/ranges while preventing blur/autosave; Escape restores the original value. Scrolling a virtualized editor moves the draft to the formula bar. Evaluation and publication remain separate from editor completion. Student name entry is unchanged and still provides no suggestions while typing.
+
+
+## Automatic paper registration
+
+The marks worksheet no longer opens a creation/conversion dialog for new result columns. Add column chooses an unused spare column, inserts a default heading and registers it through the existing validated, idempotent worksheet-paper endpoint. A spare column used for numeric/formula results or absence is detected automatically on save and on reopening the worksheet. Text notes and rows outside the roster remain working data. Paper headings update the existing paper ID inline, preserving class, maximum and publication metadata.
+
+Autosave writes validated marks and sparse working cells before automatic registration. While the new model loads, editing is disabled to avoid typing into a stale worksheet; a reload action is offered if the view refresh fails after a successful save. Maximum/precision errors remain visible. Optional source-column settings can recover a failed automatic import only when all underlying worksheet inputs have already been persisted; ordinary unsaved-mark safeguards are retained. Automatic registration does not bypass explicit publication.

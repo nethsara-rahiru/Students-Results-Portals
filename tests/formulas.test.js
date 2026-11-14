@@ -183,3 +183,44 @@ test("promoted column aliases preserve working references and remove the duplica
     "=C2",
   );
 });
+
+test("used result columns register automatically while notes and spare rows stay private", async () => {
+  const { worksheetModel, automaticPaperColumns } =
+    await import("../public/worksheet-model.js");
+  const model = worksheetModel(
+    {
+      students: [{ _id: "student-a", name: "Learner", active: true }],
+      papers: [{ _id: "paper-a", name: "Paper", max: 100 }],
+      marks: [],
+    },
+    { extraRows: 10, extraColumns: 5, cells: [] },
+    "all",
+  );
+  const state = {
+    ...model.state,
+    cells: {
+      ...model.cells,
+      B2: "10",
+      C1: "Final average",
+      C2: "=B2*2",
+      D2: "Private note",
+      E600: "25",
+      F2: "0",
+      G1: "Paper 02",
+    },
+    registerColumns: [6],
+  };
+  const candidates = automaticPaperColumns(state, model);
+  assert.deepEqual(
+    candidates.map((column) => column.columnKey),
+    ["x0", "x3", "x4"],
+  );
+  assert.equal(candidates[0].name, "Final average");
+  assert.equal(
+    automaticPaperColumns(
+      { ...model.state, cells: { ...model.cells, C1: "Unused heading" } },
+      model,
+    ).length,
+    0,
+  );
+});
