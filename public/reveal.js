@@ -1,3 +1,10 @@
+// Retain a visible landing speed instead of a nearly stationary easing tail.
+// Deceleration is smooth; the remaining motion ends at the impact frame.
+export function reelProgress(progress) {
+  const p = Math.max(0, Math.min(1, progress));
+  return 0.65 * (1 - (1 - p) ** 2) + 0.35 * p;
+}
+
 export function animateScore(
   host,
   value,
@@ -26,12 +33,14 @@ export function animateScore(
     const strip = slot.firstElementChild || document.createElement("span");
     strip.className = "digit-strip";
     strip.setAttribute("aria-hidden", "true");
-    if (!strip.children.length)
+    if (strip.children.length !== 51) {
+      strip.replaceChildren();
       for (let i = 0; i < 51; i++) {
         const n = document.createElement("span");
         n.textContent = i % 10;
         strip.append(n);
       }
+    }
     strip.style.transition = "none";
     strip.style.transform = "translateY(0em)";
     slot.append(strip);
@@ -47,7 +56,11 @@ export function animateScore(
     strips.forEach((s) => {
       if (s) {
         s.strip.style.transition = "none";
-        s.strip.style.transform = `translateY(-${s.target}em)`;
+        // Remove the off-screen reel before scaling/glowing the final mark.
+        // Otherwise the pop can rasterize a 51-line filtered surface and stall
+        // the first visible blast frame, despite synchronous callbacks.
+        s.strip.replaceChildren(s.strip.children[s.target]);
+        s.strip.style.transform = "translateY(0em)";
       }
     });
     host.setAttribute("aria-label", `Score ${value}`);
@@ -65,7 +78,7 @@ export function animateScore(
       started ??= now;
       const progress = Math.min(1, (now - started) / duration);
       if (progress === 1) return finish();
-      const eased = 1 - Math.pow(1 - progress, 1.6);
+      const eased = reelProgress(progress);
       for (const s of strips)
         if (s) s.strip.style.transform = `translateY(-${s.target * eased}em)`;
       frame = requestAnimationFrame(roll);

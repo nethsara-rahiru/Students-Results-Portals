@@ -92,6 +92,7 @@ export class StudentJourney {
     this.onResize = () => {
       this.finishMotion();
       this.layout();
+      if (this.state === "reveal") this.scoreEffects.warm();
       this.accent.draw();
     };
     window.addEventListener("resize", this.onResize);
@@ -365,6 +366,7 @@ export class StudentJourney {
     this.node("score").setAttribute("aria-hidden", String(state !== "reveal"));
     update?.();
     this.layout();
+    if (state === "reveal") this.scoreEffects.warm();
     this.accent.morph(state === "paper" ? 1 : 0, this.media.matches ? 0 : 900);
     this.animations = [];
     if (!this.media.matches) {

@@ -70,3 +70,7 @@ Login-rate tests verify that successful teacher sign-ins do not consume the fail
 ## Spinner and blast synchronization
 
 33 Node tests and 33 browser tests cover this update. A timing regression observes the exact score-completion mutation and intercepts the glass/pop animation starts for both an intermediate and final paper. It checks that the last visible reel movement is within 100 ms of completion, the blast starts within the same frame budget, the number pop starts with it, the main bubble has no delay, and the final pop is larger. Existing reduced-motion, skip, replay, score-range and mobile checks remain included.
+
+## Visible impact rendering
+
+34 Node tests and 35 browser tests cover this correction. The new desktop (1280px) and mobile (390px) checks sample rendered reel positions and glass opacity/scale every animation frame. They require visible reel travel shortly before the result, a sub-100ms gap from the last reel frame to the first visible impact, a clearly visible initial bubble, and compact one-digit strips at completion. Earlier callback-only timing checks remain. These frame checks caught a roughly 780ms rendering gap that callback timestamps did not show. A unit test also verifies that the deceleration retains visible travel until impact. Existing replay, reduced motion, Skip, decimals, ordering and admin regressions remain included.

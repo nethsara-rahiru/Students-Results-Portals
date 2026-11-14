@@ -62,6 +62,8 @@ export class ScoreEffects {
     this.animations = [];
     this.confettiCleanup?.();
     this.confettiCleanup = null;
+    delete this.layer.dataset.ready;
+    delete this.layer.dataset.impact;
   }
   clear() {
     this.stop();
@@ -114,6 +116,33 @@ export class ScoreEffects {
     );
     this.animations.push(this.suspense);
   }
+  warm() {
+    if (!this.profile?.burst || this.media.matches || this.completed) return;
+    const box = this.score.getBoundingClientRect(),
+      root = this.root.getBoundingClientRect(),
+      burst = this.layer.querySelector(".score-burst");
+    burst.style.left = box.left + box.width / 2 - root.left + "px";
+    burst.style.top = box.top + box.height / 2 - root.top + "px";
+    // Cover the viewport from the score origin with one translucent bubble.
+    const radius = Math.max(
+      ...[
+        [0, 0],
+        [root.width, 0],
+        [0, root.height],
+        [root.width, root.height],
+      ].map(([x, y]) =>
+        Math.hypot(
+          x - (box.left + box.width / 2 - root.left),
+          y - (box.top + box.height / 2 - root.top),
+        ),
+      ),
+    );
+    this.blastScale = (radius * 2.15) / 512;
+    burst.style.setProperty("--blast-scale", String(this.blastScale));
+    // Allocate and rasterize the glass while the reels are moving, so the
+    // landing frame only starts compositor animations, not a new large paint.
+    this.layer.dataset.ready = "true";
+  }
   settle({ skip = false } = {}) {
     if (!this.profile || this.completed) return;
     this.completed = true;
@@ -123,27 +152,10 @@ export class ScoreEffects {
     this.root.dataset.scoreCelebration = String(p.celebration || this.last);
     this.suspense?.cancel();
     if (reduced) return;
+    this.layer.dataset.impact = "true";
+    const impactTime = document.timeline.currentTime,
+      firstImpact = this.animations.length;
     if (p.burst) {
-      const box = this.score.getBoundingClientRect(),
-        root = this.root.getBoundingClientRect(),
-        burst = this.layer.querySelector(".score-burst");
-      burst.style.left = box.left + box.width / 2 - root.left + "px";
-      burst.style.top = box.top + box.height / 2 - root.top + "px";
-      // Cover the viewport from the score origin with one translucent bubble.
-      const radius = Math.max(
-        ...[
-          [0, 0],
-          [root.width, 0],
-          [0, root.height],
-          [root.width, root.height],
-        ].map(([x, y]) =>
-          Math.hypot(
-            x - (box.left + box.width / 2 - root.left),
-            y - (box.top + box.height / 2 - root.top),
-          ),
-        ),
-      );
-      burst.style.setProperty("--blast-size", `${Math.ceil(radius * 2.15)}px`);
       for (const [index, glass] of this.layer
         .querySelectorAll(".score-glass")
         .entries()) {
@@ -151,20 +163,23 @@ export class ScoreEffects {
           glass.animate(
             [
               {
-                opacity: index ? 0 : 0.18,
-                transform: "translate(-50%,-50%) scale(.12)",
+                opacity: index ? 0 : 0.65,
+                transform: `translate(-50%,-50%) scale(${this.blastScale * 0.22})`,
               },
               {
                 opacity: index ? 0.38 : 0.8,
-                transform: "translate(-50%,-50%) scale(.34)",
-                offset: 0.12,
+                transform: `translate(-50%,-50%) scale(${this.blastScale * 0.34})`,
+                offset: 0.04,
               },
               {
                 opacity: 0.28,
-                transform: "translate(-50%,-50%) scale(.8)",
+                transform: `translate(-50%,-50%) scale(${this.blastScale * 0.8})`,
                 offset: 0.66,
               },
-              { opacity: 0, transform: "translate(-50%,-50%) scale(1)" },
+              {
+                opacity: 0,
+                transform: `translate(-50%,-50%) scale(${this.blastScale})`,
+              },
             ],
             {
               duration: this.last ? 2200 : 1850,
@@ -230,6 +245,10 @@ export class ScoreEffects {
         ),
       );
     }
+    // Explicitly join this rendering frame rather than waiting for a pending
+    // Web Animation's automatic start time to be resolved by a later frame.
+    for (const animation of this.animations.slice(firstImpact))
+      animation.startTime = impactTime;
     if (p.celebration || this.last) {
       const count = this.last
         ? p.distinction

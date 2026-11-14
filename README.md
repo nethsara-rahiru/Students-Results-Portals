@@ -201,3 +201,5 @@ Effects use the percentage of each paper's maximum: below 10% fades to deep red;
 During the spinner, a blue-purple atmosphere slowly develops into the score-range color rather than revealing it immediately. Qualifying bursts expand as a large translucent glass bubble behind the score, with a delayed echo and a longer final-paper blast. The effect is temporary, clears on replay, and is disabled by reduced motion or Skip animation.
 
 The glass blast and number pop start in the same rendering frame that the spinner lands on the actual mark. The reel engine shares its completion clock with the effects, avoiding a separate post-spin delay; only the decorative glass echo is delayed.
+
+At impact, hidden reel digits are removed before the pop and glass textures are prepared during the roll, preventing a rendering pause between the visible spinner stop and blast. The final roll keeps visible movement up to impact; the main bubble is visible from its first frame.

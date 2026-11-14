@@ -62,3 +62,8 @@ The spinner calls `ScoreEffects.begin(duration)` using its actual roll duration.
 
 
 The reel engine uses one requestAnimationFrame clock with visible deceleration through its endpoint. Its completion callback immediately starts the glass blast and number pop; screen-transition completion only gates the following controls. The first glass surface has zero delay and a visible first keyframe; only its echo is delayed. The number briefly scales to 1.22 (1.28 for the final paper), then settles back. Skip and reduced motion suppress both effects.
+
+The completed score compacts each 51-line digit strip to its one actual digit before the number is scaled or its glow changes. Replaying repopulates the same strip element. This avoids rasterizing the full off-screen reel during the pop. Qualifying glass surfaces are sized and prewarmed during the roll, so completion does not allocate large textures or measure new geometry. The easing retains a small linear component through its endpoint, and the main bubble starts at a visible opacity/size; only its echo is delayed.
+
+
+Glass uses cached 512px transparent textures (blue and gold) scaled by the measured viewport radius, rather than rasterizing large live gradients and blur filters at impact. A faint prewarm state keeps these compositor resources ready during the roll; it is cleared by the impact state so no bubble remains after the blast. Digit filters are removed, and impact animations explicitly share the current document-timeline start time.

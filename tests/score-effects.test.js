@@ -46,3 +46,20 @@ test("invalid result values cannot produce reveal profiles", () => {
   ])
     assert.throws(() => scoreProfile(value, max), RangeError);
 });
+
+test("reels keep visible motion until impact instead of easing into an idle tail", async () => {
+  const { reelProgress } = await import("../public/reveal.js");
+  assert.equal(reelProgress(0), 0);
+  assert.equal(reelProgress(1), 1);
+  assert.equal(reelProgress(-1), 0);
+  assert.equal(reelProgress(2), 1);
+  for (let i = 1; i <= 100; i++)
+    assert.ok(reelProgress(i / 100) > reelProgress((i - 1) / 100));
+  // Even the shortest reel still has a whole digit to travel 200ms before
+  // landing on a final paper, rather than already displaying its final digit.
+  assert.ok(40 * (1 - reelProgress(1 - 200 / 2900)) > 1);
+  assert.ok(40 * (1 - reelProgress(1 - 50 / 2900)) > 0.24);
+  const firstStep = reelProgress(0.01) - reelProgress(0);
+  const lastStep = reelProgress(1) - reelProgress(0.99);
+  assert.ok(firstStep > lastStep); // It still decelerates.
+});
