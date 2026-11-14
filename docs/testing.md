@@ -66,3 +66,7 @@ Login-rate tests verify that successful teacher sign-ins do not consume the fail
 ## Gradual atmosphere and glass blast
 
 33 Node tests and 32 browser tests include the gradual spinner atmosphere and viewport-sized glass blast. A browser check samples early and late wash opacity while the spinner is still running, verifies that the expanding glass surface exceeds the viewport width, captures `glass-blast.png`, and confirms that a live reduced-motion change cancels and hides the effect. The existing range, replay, exact-score, mobile and admin regressions remain included.
+
+## Spinner and blast synchronization
+
+33 Node tests and 33 browser tests cover this update. A timing regression observes the exact score-completion mutation and intercepts the glass/pop animation starts for both an intermediate and final paper. It checks that the last visible reel movement is within 100 ms of completion, the blast starts within the same frame budget, the number pop starts with it, the main bubble has no delay, and the final pop is larger. Existing reduced-motion, skip, replay, score-range and mobile checks remain included.
