@@ -193,3 +193,7 @@ Previous standalone calculation workbooks remain in MongoDB's `workbooks` collec
 [Expandable worksheet](docs/screenshots/expandable-worksheet.png) · [Class worksheet preview](docs/screenshots/class-worksheet.png) · [Name header dropdown](docs/screenshots/class-picker.png).
 
 [Formula suggestions](docs/screenshots/formula-functions.png) · [Calculated final paper](docs/screenshots/calculated-paper.png) · [Student final reveal](docs/screenshots/calculated-student-result.png).
+
+### Score-based student reveals
+
+Effects use the percentage of each paper's maximum: below 10% fades to deep red; 10–under 20% uses softer red; above 50% adds a single light burst when the spinner stops; above 70% turns the digits gold; above 75% adds confetti; above 90% adds a brighter achievement treatment. Thresholds are strict (50%, 70%, and 75% keep the preceding effect). Every final paper receives a larger completion celebration, including low scores, with supportive messages. These effects never change actual marks or assert unsupported improvement. Reduced-motion preferences and **Skip animation** retain the exact score and static color treatment while suppressing decorative motion. Replay and changing papers clear previous effects.

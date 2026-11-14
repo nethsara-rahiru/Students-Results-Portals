@@ -1,5 +1,6 @@
 import { api, esc } from "./client.js";
-import { animateScore, motivation, celebrate } from "./reveal.js";
+import { animateScore, motivation } from "./reveal.js";
+import { ScoreEffects } from "./score-effects.js";
 import { JourneyAccent, coreArtwork } from "./journey-accent.js";
 
 // Mounted once: the title, graphic, input, score and controls retain their DOM
@@ -66,6 +67,7 @@ export class StudentJourney {
     this.title = node("journey-title");
     this.input = node("student-name");
     this.accent = new JourneyAccent(this.core, this.media);
+    this.scoreEffects = new ScoreEffects(this.root, node("score"), this.media);
     this.input.addEventListener("input", () => {
       this.input.setCustomValidity("");
       node("suggest").replaceChildren();
@@ -81,7 +83,11 @@ export class StudentJourney {
     node("primary-action").onclick = () => this.primary?.();
     node("secondary-action").onclick = () => this.secondary?.();
     node("paper").onclick = () => this.reveal();
-    node("skip-score").onclick = () => this.finishSpin?.();
+    node("skip-score").onclick = () => {
+      this.skipEffects = true;
+      this.scoreEffects.reduce();
+      this.finishSpin?.();
+    };
     node("skip-transition").onclick = () => this.finishMotion();
     this.onResize = () => {
       this.finishMotion();
@@ -91,6 +97,7 @@ export class StudentJourney {
     window.addEventListener("resize", this.onResize);
     this.onPreference = () => {
       if (this.media.matches) {
+        this.scoreEffects.reduce();
         this.finishMotion();
         this.finishSpin?.();
       }
@@ -334,6 +341,7 @@ export class StudentJourney {
     );
     this.lock(true);
     this.state = state;
+    if (state !== "reveal") this.scoreEffects.clear();
     this.root.dataset.state = state;
     this.node("error").textContent = "";
     this.show("message", state === "reveal");
@@ -594,6 +602,8 @@ export class StudentJourney {
     const p = this.data.papers[this.index],
       last = this.index === this.data.papers.length - 1;
     this.root.dataset.final = String(last);
+    this.skipEffects = false;
+    this.scoreEffects.prepare(p.value, p.max, last);
     this.root.dataset.complete = "false";
     this.node("score").removeAttribute("data-complete");
     let motionReady = false,
@@ -628,7 +638,10 @@ export class StudentJourney {
     const focusNext = document.activeElement === this.node("skip-score");
     this.root.dataset.complete = "true";
     this.show("skip-score", false);
-    this.show("achievement", last);
+    this.show("achievement", last || this.scoreEffects.profile?.celebration);
+    this.node("achievement").querySelector("span").textContent = last
+      ? "CHAPTER COMPLETE"
+      : "RESULT MILESTONE";
     this.text(
       "motivation",
       `${this.data.student}, ${motivation(this.data.papers, this.index).replace(/^Your/, "your")}`,
@@ -645,10 +658,10 @@ export class StudentJourney {
         ? "ONE CHAPTER COMPLETE. MORE TO COME."
         : "ONE STEP FORWARD. KEEP GOING.",
     );
+    this.scoreEffects.settle({ skip: this.skipEffects });
     if (last) {
-      this.accent.morph(0, this.media.matches ? 0 : 1200);
-      celebrate(this.root, this.media.matches);
-      if (!this.media.matches)
+      this.accent.morph(0, this.media.matches || this.skipEffects ? 0 : 1200);
+      if (!this.media.matches && !this.skipEffects)
         for (const path of this.node("achievement").querySelectorAll("path")) {
           path.setAttribute("pathLength", "100");
           path.style.strokeDasharray = "100";
@@ -662,7 +675,7 @@ export class StudentJourney {
     }
     this.layout();
     if (focusNext) this.node("primary-action").focus({ preventScroll: true });
-    if (last && !this.media.matches)
+    if (last && !this.media.matches && !this.skipEffects)
       this.animations.push(
         this.core.animate(
           [
@@ -692,6 +705,7 @@ export class StudentJourney {
     this.finishSpin?.cancel?.();
     this.finishMotion();
     this.accent.dispose();
+    this.scoreEffects.dispose();
     window.removeEventListener("resize", this.onResize);
     this.media.removeEventListener("change", this.onPreference);
   }
