@@ -1,7 +1,6 @@
 // Deliberately interpreted expressions: no eval, Function, scripts or network access.
 export const columnName = (index) => {
-  if (!Number.isSafeInteger(index) || index < 0 || index > 16383)
-    throw Error("#REF!");
+  if (!Number.isSafeInteger(index) || index < 0) throw Error("#REF!");
   let name = "";
   for (index++; index; index = Math.floor((index - 1) / 26))
     name = String.fromCharCode(65 + ((index - 1) % 26)) + name;
@@ -17,12 +16,7 @@ export function coordinates(ref) {
       0,
     ) - 1,
   ];
-  if (
-    !result.every(Number.isSafeInteger) ||
-    result[0] > 1048575 ||
-    result[1] > 16383
-  )
-    throw Error("#REF!");
+  if (!result.every(Number.isSafeInteger)) throw Error("#REF!");
   return result;
 }
 export function calculator(cells, rows, columns) {
@@ -101,12 +95,19 @@ export function calculator(cells, rows, columns) {
           const end = t[at++];
           const [r1, c1] = coordinates(token),
             [r2, c2] = coordinates(end || "");
-          if (Math.abs(r2 - r1) * Math.abs(c2 - c1) > 10000)
-            throw Error("#LIMIT!");
+          if (Math.max(r1, r2) >= rows || Math.max(c1, c2) >= columns)
+            throw Error("#REF!");
           value = [];
-          for (let r = Math.min(r1, r2); r <= Math.max(r1, r2); r++)
-            for (let c = Math.min(c1, c2); c <= Math.max(c1, c2); c++)
-              value.push(cell(columnName(c) + (r + 1), depth));
+          for (const address of Object.keys(cells)) {
+            const [r, c] = coordinates(address);
+            if (
+              r >= Math.min(r1, r2) &&
+              r <= Math.max(r1, r2) &&
+              c >= Math.min(c1, c2) &&
+              c <= Math.max(c1, c2)
+            )
+              value.push(cell(address, depth));
+          }
         } else value = cell(token, depth);
       } else if (/^(TRUE|FALSE)$/i.test(token || ""))
         value = token.toUpperCase() === "TRUE";

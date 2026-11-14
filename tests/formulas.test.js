@@ -107,3 +107,31 @@ test("worksheet formula references follow stable student and paper IDs", async (
     /outside this class/,
   );
 });
+
+test("large sparse formula ranges and additional cell references work beyond old sheet limits", async () => {
+  const { coordinates } = await import("../public/formulas.js");
+  assert.deepEqual(
+    coordinates(columnName(20000) + "2000000"),
+    [1999999, 20000],
+  );
+  const calc = calculator(
+    { A1: "10", A1500000: "20", B1: "=SUM(A1:A2000000)" },
+    2000000,
+    20001,
+  );
+  assert.equal(calc("B1"), 30);
+  const { bindingsFor, rebaseFormula } =
+    await import("../public/worksheet-references.js");
+  const students = [{ _id: "student-a" }],
+    papers = [{ _id: "paper-a" }];
+  const formula = "=DW650",
+    formulaBindings = bindingsFor(formula, students, papers, true, "all");
+  assert.equal(
+    rebaseFormula({ formula, formulaBindings }, students, papers, "all"),
+    "=DW650",
+  );
+  assert.equal(
+    rebaseFormula({ formula, formulaBindings }, students, papers, "unassigned"),
+    "=#REF!",
+  );
+});
