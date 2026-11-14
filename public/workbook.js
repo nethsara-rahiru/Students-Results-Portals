@@ -26,7 +26,7 @@ export async function mountWorkbook(host, data, config = {}) {
       columns: state.columns,
       cells: state.cells,
     });
-  host.innerHTML = `<div class="workbook-ribbon"><div><strong>Worksheet</strong><small>Private teacher calculations · saved to MongoDB</small></div><button data-action="add-row" class="secondary">Add row</button><button data-action="add-column" class="secondary">Add column</button><button data-action="insert-row" class="secondary">Insert row above</button><button data-action="insert-column" class="secondary">Insert column before</button><button data-action="delete-row" class="secondary">Delete row</button><button data-action="delete-column" class="secondary">Delete column</button><button data-action="undo" class="secondary">Undo</button><button data-action="redo" class="secondary">Redo</button><button data-action="fill" class="secondary">Fill down</button><button data-action="import" class="secondary">Load marks snapshot</button><button data-action="retry" class="secondary">Retry save</button></div><div class="formula-bar"><output id="cell-address">A1</output><label>fx<input aria-label="Cell formula or value" autocomplete="off" placeholder="Type a value or =SUM(A1:A5)"></label></div><p class="workbook-status" role="status">All changes saved</p><div class="sheet workbook-grid" tabindex="0" aria-label="Flexible worksheet"></div><p class="workbook-selection" role="status"></p><details class="keyboard-guide"><summary>Worksheet help & supported formulas</summary><p>Click a cell to select it; double-click or use the formula bar to edit. Shift + click / arrows selects a range. Tab and Enter navigate. Copy/paste TSV from Excel, Delete clears, Ctrl/⌘ + D fills down, Ctrl/⌘ + Z / Y undoes/redoes. Rows and columns can be inserted or deleted at the selected cell. Fill down adjusts relative references and preserves $ anchors.</p><p>Functions: SUM, AVERAGE, MIN, MAX, COUNT, COUNTA, ROUND, ABS, IF, AND, OR, NOT. Supports A1 references, ranges, arithmetic, comparisons, percentages and text literals. This is a supported subset of Excel, without macros, external links or XLSX files. IF arguments are evaluated eagerly. Limits: 500 rows, 100 columns and 10,000 cells. Loading marks replaces this worksheet after confirmation; calculations never publish results automatically.</p></details>`;
+  host.innerHTML = `<div class="workbook-ribbon"><div><strong>Worksheet</strong><small>Private teacher calculations · saved to MongoDB</small></div><button data-action="add-row" class="secondary">Add row</button><button data-action="add-column" class="secondary">Add column</button><button data-action="insert-row" class="secondary">Insert row above</button><button data-action="insert-column" class="secondary">Insert column before</button><button data-action="delete-row" class="secondary">Delete row</button><button data-action="delete-column" class="secondary">Delete column</button><button data-action="undo" class="secondary">Undo</button><button data-action="redo" class="secondary">Redo</button><button data-action="fill" class="secondary">Fill down</button><button data-action="import" class="secondary">Load marks snapshot</button><button data-action="retry" class="secondary">Retry save</button></div><div class="formula-bar"><input id="cell-address" aria-label="Go to cell" value="A1" title="Enter an address and press Enter to jump or extend the sheet"><label>fx<input aria-label="Cell formula or value" autocomplete="off" placeholder="Type a value or =SUM(A1:A5)"></label></div><p class="workbook-status" role="status">All changes saved</p><div class="sheet workbook-grid" tabindex="0" aria-label="Flexible worksheet"></div><p class="workbook-selection" role="status"></p><details class="keyboard-guide"><summary>Worksheet help & supported formulas</summary><p>Click a cell to select it; double-click or use the formula bar to edit. Shift + click / arrows selects a range. Tab and Enter navigate. Copy/paste TSV from Excel, Delete clears, Ctrl/⌘ + D fills down, Ctrl/⌘ + Z / Y undoes/redoes. Rows and columns can be inserted or deleted at the selected cell. Fill down adjusts relative references and preserves $ anchors.</p><p>Functions: SUM, AVERAGE, MIN, MAX, COUNT, COUNTA, ROUND, ABS, IF, AND, OR, NOT. Supports A1 references, ranges, arithmetic, comparisons, percentages and text literals. This is a supported subset of Excel, without macros, external links or XLSX files. IF arguments are evaluated eagerly. Limits: 500 rows, 100 columns and 10,000 cells. Loading marks replaces this worksheet after confirmation; calculations never publish results automatically.</p></details>`;
   if (bound) {
     host.classList.add("marks-bound-workbook");
     host.querySelector(".workbook-ribbon strong").textContent =
@@ -45,9 +45,21 @@ export async function mountWorkbook(host, data, config = {}) {
       "Add student row";
     host.querySelector('[data-action="add-column"]').textContent =
       "Add paper column";
+    if (config.expandable) {
+      for (const [action, label] of [
+        ["working-row", "Add row"],
+        ["working-column", "Add column"],
+      ]) {
+        const button = document.createElement("button");
+        button.className = "secondary";
+        button.dataset.action = action;
+        button.textContent = label;
+        host.querySelector(".workbook-ribbon").append(button);
+      }
+    }
     const help = host.querySelector(".keyboard-guide");
     help.querySelector("p").textContent =
-      "Column A contains student names; row 1 contains paper headers. Use the dropdown beside Name to load a class. Add student row and Add paper column create real profiles and draft papers. Names and headers are protected; edit them from Students and Papers. Shift + click / arrows selects a range; copy/paste, Delete, fill down, undo and redo work on mark cells. A = absent; blank = no result; zero is a valid mark.";
+      "Column A contains student names; row 1 contains paper headers. Add row/Add column creates blank working space; paste expands it automatically. Enter any cell address in the address box and press Enter to jump or expand. Large sheets render a scrolling window. Working cells stay private to teachers and can feed formulas in real mark cells. Use the dropdown beside Name to load a class. Add student row and Add paper column create real profiles and draft papers. Names and headers are protected; edit them from Students and Papers. Shift + click / arrows selects a range; copy/paste, Delete, fill down, undo and redo work on mark cells. A = absent; blank = no result; zero is a valid mark.";
     help.querySelectorAll("p")[1].textContent =
       "Functions: SUM, AVERAGE, MIN, MAX, COUNT, COUNTA, ROUND, ABS, IF, AND, OR, NOT. Formulas recalculate in this worksheet and save validated numeric marks plus their formula. Use ROUND to keep at most two decimals. Formula references follow student and paper IDs when switching classes or when rows move; a missing reference shows #REF!. Publishing is managed separately in Papers. The supported Excel subset does not include macros or XLSX import/export; IF arguments evaluate eagerly.";
     const caption = document.createElement("p");
@@ -62,9 +74,60 @@ export async function mountWorkbook(host, data, config = {}) {
     }
   }
   const grid = host.querySelector(".workbook-grid"),
-    bar = host.querySelector(".formula-bar input"),
+    bar = host.querySelector('[aria-label="Cell formula or value"]'),
     status = host.querySelector(".workbook-status");
-  let inputs = [];
+  let inputs = [],
+    visibleInputs = [],
+    rendering = false,
+    windowKey = "";
+  const rowScale = () => Math.max(1, (state.rows * 44) / 8000000),
+    columnScale = () => Math.max(1, (state.columns * 180) / 8000000);
+  const rowStart = () =>
+    state.rows <= 80
+      ? 1
+      : rowScale() > 1
+        ? 1 +
+          Math.floor(
+            Math.max(
+              0,
+              Math.min(
+                1,
+                grid.scrollTop / Math.max(1, 8000083 - grid.clientHeight),
+              ),
+            ) *
+              (state.rows - 56),
+          )
+        : Math.max(
+            1,
+            Math.min(state.rows - 1, Math.floor(grid.scrollTop / 44) - 5),
+          );
+  const columnStart = () =>
+    state.columns <= 24
+      ? 1
+      : columnScale() > 1
+        ? 1 +
+          Math.floor(
+            Math.max(
+              0,
+              Math.min(
+                1,
+                grid.scrollLeft / Math.max(1, 8000275 - grid.clientWidth),
+              ),
+            ) *
+              (state.columns - 17),
+          )
+        : Math.max(
+            1,
+            Math.min(state.columns - 1, Math.floor(grid.scrollLeft / 180) - 3),
+          );
+  const rowGap = (count) =>
+    rowScale() > 1
+      ? (count / (state.rows - 56)) * (8000000 - 55 * 44)
+      : count * 44;
+  const columnGap = (count) =>
+    columnScale() > 1
+      ? (count / (state.columns - 17)) * (8000000 - 16 * 180)
+      : count * 180;
   function message(text, error = false) {
     status.textContent = text;
     status.classList.toggle("error", error);
@@ -85,33 +148,41 @@ export async function mountWorkbook(host, data, config = {}) {
     return result;
   }
   function paint() {
-    const calc = calculator(state.cells, state.rows, state.columns);
-    const nums = [];
-    for (let r = 0; r < state.rows; r++)
-      for (let c = 0; c < state.columns; c++) {
-        const el = inputs[r][c],
-          raw = state.cells[ref(r, c)] || "",
-          value = bound && (r === 0 || c === 0) ? raw : calc(ref(r, c));
-        if (document.activeElement !== el) el.value = String(value);
-        el.classList.toggle("formula-cell", raw.startsWith("="));
-        el.classList.toggle(
-          "cell-error",
-          raw.startsWith("=") && String(value).startsWith("#"),
-        );
-        el.classList.remove("selected");
-        el.title = raw.startsWith("=") || !editable(r, c) ? raw : "";
-      }
-    for (const [r, c] of selection()) {
-      inputs[r][c].classList.add("selected");
-      const value = calc(ref(r, c));
-      if (typeof value === "number") nums.push(value);
+    const calc = calculator(state.cells, state.rows, state.columns),
+      [r1, c1, r2, c2] = bounds(),
+      nums = [];
+    for (const { r, c, input: el } of visibleInputs) {
+      const raw = state.cells[ref(r, c)] || "",
+        value =
+          bound &&
+          ((r === 0 && c <= config.paperCount) ||
+            (c === 0 && r <= config.studentCount))
+            ? raw
+            : calc(ref(r, c));
+      if (document.activeElement !== el) el.value = String(value);
+      el.classList.toggle("formula-cell", raw.startsWith("="));
+      el.classList.toggle(
+        "cell-error",
+        raw.startsWith("=") && String(value).startsWith("#"),
+      );
+      el.classList.toggle("selected", r >= r1 && r <= r2 && c >= c1 && c <= c2);
+      el.title = raw.startsWith("=") || !editable(r, c) ? raw : "";
     }
-    host.querySelector("#cell-address").textContent = ref(...selected);
+    for (const address of Object.keys(state.cells)) {
+      const [r, c] = coordinates(address);
+      if (r >= r1 && r <= r2 && c >= c1 && c <= c2) {
+        const value = calc(address);
+        if (typeof value === "number") nums.push(value);
+      }
+    }
+    if (document.activeElement !== host.querySelector("#cell-address"))
+      host.querySelector("#cell-address").value = ref(...selected);
     bar.value = state.cells[ref(...selected)] || "";
     bar.readOnly = !editable(...selected);
-    const sum = nums.reduce((a, b) => a + b, 0);
+    const sum = nums.reduce((a, b) => a + b, 0),
+      count = (r2 - r1 + 1) * (c2 - c1 + 1);
     host.querySelector(".workbook-selection").textContent =
-      `${selection().length} selected · COUNT ${nums.length} · SUM ${Number(sum.toFixed(6))} · AVERAGE ${nums.length ? Number((sum / nums.length).toFixed(6)) : "—"}`;
+      `${count} selected · COUNT ${nums.length} · SUM ${Number(sum.toFixed(6))} · AVERAGE ${nums.length ? Number((sum / nums.length).toFixed(6)) : "—"}`;
   }
   function select(r, c, extend = false) {
     selected = [
@@ -119,17 +190,76 @@ export async function mountWorkbook(host, data, config = {}) {
       Math.max(0, Math.min(state.columns - 1, c)),
     ];
     if (!extend) anchor = [...selected];
-    paint();
+    if (!inputs[selected[0]]?.[selected[1]]) {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        grid.scrollTop =
+          rowScale() > 1
+            ? Math.max(0, (selected[0] - 1) / (state.rows - 2)) *
+              (8000083 - grid.clientHeight)
+            : Math.max(0, selected[0] - 5) * 44;
+        grid.scrollLeft =
+          columnScale() > 1
+            ? Math.max(0, (selected[1] - 1) / (state.columns - 2)) *
+              (8000275 - grid.clientWidth)
+            : Math.max(0, selected[1] - 3) * 180;
+        render();
+        if (inputs[selected[0]]?.[selected[1]]) break;
+      }
+    } else paint();
   }
   function render() {
+    rendering = true;
     const scroll = [grid.scrollTop, grid.scrollLeft];
+    const rStart = rowStart(),
+      rEnd = state.rows > 80 ? Math.min(state.rows, rStart + 55) : state.rows;
+    const cStart = columnStart(),
+      cEnd =
+        state.columns > 24
+          ? Math.min(state.columns, cStart + 16)
+          : state.columns;
+    windowKey = rStart + ":" + cStart;
+    const shownRows = [
+      0,
+      ...Array.from({ length: rEnd - rStart }, (_, i) => rStart + i),
+    ];
+    const shownCols = [
+      0,
+      ...Array.from({ length: cEnd - cStart }, (_, i) => cStart + i),
+    ];
     grid.innerHTML = "";
     inputs = [];
+    visibleInputs = [];
     const table = document.createElement("table");
     table.setAttribute("aria-label", "Flexible Excel-style worksheet");
+    table.setAttribute("aria-rowcount", state.rows + 1);
+    table.setAttribute("aria-colcount", state.columns + 1);
+    table.style.tableLayout = "fixed";
+    table.style.width =
+      45 + 230 + ((state.columns - 1) * 180) / columnScale() + "px";
+    const colgroup = document.createElement("colgroup");
+    const addCol = (width) => {
+      const col = document.createElement("col");
+      col.style.width = width + "px";
+      colgroup.append(col);
+    };
+    addCol(45);
+    addCol(230);
+    if (cStart > 1) addCol(columnGap(cStart - 1));
+    for (let c = cStart; c < cEnd; c++) addCol(180);
+    if (cEnd < state.columns) addCol(columnGap(state.columns - cEnd));
+    table.append(colgroup);
+    const spacerCell = (row, width, header = false) => {
+      const cell = document.createElement(header ? "th" : "td");
+      cell.className = "worksheet-spacer";
+      cell.setAttribute("aria-hidden", "true");
+      cell.style.width = width + "px";
+      row.append(cell);
+    };
     const head = table.createTHead().insertRow();
     head.append(document.createElement("th"));
-    for (let c = 0; c < state.columns; c++) {
+    for (const c of shownCols) {
+      if (c === cStart && cStart > 1)
+        spacerCell(head, columnGap(cStart - 1), true);
       const th = document.createElement("th");
       th.scope = "col";
       const button = document.createElement("button");
@@ -145,8 +275,23 @@ export async function mountWorkbook(host, data, config = {}) {
       th.append(button);
       head.append(th);
     }
+    if (cEnd < state.columns)
+      spacerCell(head, columnGap(state.columns - cEnd), true);
     const body = table.createTBody();
-    for (let r = 0; r < state.rows; r++) {
+    function spacerRow(height) {
+      const row = body.insertRow();
+      row.setAttribute("aria-hidden", "true");
+      row.className = "worksheet-spacer";
+      const td = row.insertCell();
+      td.colSpan =
+        1 +
+        shownCols.length +
+        (cStart > 1 ? 1 : 0) +
+        (cEnd < state.columns ? 1 : 0);
+      td.style.height = height + "px";
+    }
+    for (const r of shownRows) {
+      if (r === rStart && rStart > 1) spacerRow(rowGap(rStart - 1));
       const row = body.insertRow(),
         th = document.createElement("th");
       th.scope = "row";
@@ -162,12 +307,19 @@ export async function mountWorkbook(host, data, config = {}) {
       };
       th.append(button);
       row.append(th);
+      row.setAttribute("aria-rowindex", r + 2);
       inputs[r] = [];
-      for (let c = 0; c < state.columns; c++) {
+      for (const c of shownCols) {
+        if (c === cStart && cStart > 1) spacerCell(row, columnGap(cStart - 1));
         const input = document.createElement("input");
         input.setAttribute("aria-label", ref(r, c));
         input.autocomplete = "off";
         input.readOnly = !editable(r, c);
+        if (
+          config.expandable &&
+          (r > config.studentCount || c > config.paperCount)
+        )
+          input.classList.add("working-cell");
         if (bound && c > 0 && r > 0 && !editable(r, c)) {
           input.classList.add("unavailable-cell");
           input.title = "No student/paper match in this class";
@@ -210,12 +362,68 @@ export async function mountWorkbook(host, data, config = {}) {
           input.setAttribute("aria-label", "Name header");
         }
         inputs[r][c] = input;
+        visibleInputs.push({ r, c, input });
       }
+      if (cEnd < state.columns)
+        spacerCell(row, columnGap(state.columns - cEnd));
     }
+    if (rEnd < state.rows) spacerRow(rowGap(state.rows - rEnd));
     grid.append(table);
     grid.scrollTop = scroll[0];
     grid.scrollLeft = scroll[1];
     paint();
+    rendering = false;
+  }
+  let scrollFrame;
+  grid.addEventListener("scroll", () => {
+    if (rendering || busy) return;
+    cancelAnimationFrame(scrollFrame);
+    scrollFrame = requestAnimationFrame(() => {
+      const nextR = rowStart(),
+        nextC = columnStart();
+      if (windowKey === nextR + ":" + nextC) return;
+      const active = document.activeElement,
+        focused = visibleInputs.find((cell) => cell.input === active);
+      if (focused) active.blur();
+      const redraw = () => {
+        render();
+        if (focused) {
+          const input = inputs[focused.r]?.[focused.c];
+          if (input) input.focus({ preventScroll: true });
+          else grid.focus({ preventScroll: true });
+        }
+      };
+      if (busy) idle.then(redraw);
+      else redraw();
+    });
+  });
+  host.querySelector("#cell-address").onkeydown = (event) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    try {
+      const [r, c] = coordinates(event.target.value);
+      if (r >= state.rows || c >= state.columns) {
+        if (!config.expandable) throw Error("Cell outside worksheet");
+        change(() => {
+          state.rows = Math.max(state.rows, r + 1);
+          state.columns = Math.max(state.columns, c + 1);
+        });
+      }
+      select(r, c);
+      idle.then(() => {
+        select(r, c);
+        focusCell(r, c);
+      });
+    } catch (error) {
+      message(error.message, true);
+    }
+  };
+  function focusCell(r, c) {
+    const input = inputs[r]?.[c];
+    if (input) {
+      input.focus({ preventScroll: true });
+      input.scrollIntoView({ block: "nearest", inline: "nearest" });
+    }
   }
   function set(r, c, value) {
     if (!editable(r, c)) {
@@ -274,9 +482,12 @@ export async function mountWorkbook(host, data, config = {}) {
     try {
       fn();
       if (
-        state.rows * state.columns > 10000 ||
-        state.rows > 500 ||
-        state.columns > 100 ||
+        (!config.expandable &&
+          (state.rows * state.columns > 10000 ||
+            state.rows > 500 ||
+            state.columns > 100)) ||
+        !Number.isSafeInteger(state.rows) ||
+        !Number.isSafeInteger(state.columns) ||
         state.rows < 1 ||
         state.columns < 1
       )
@@ -284,6 +495,7 @@ export async function mountWorkbook(host, data, config = {}) {
           "Keep between 1 and 500 rows, 1 and 100 columns, and at most 10,000 cells",
         );
       undo.push(before);
+      if (undo.length > 50) undo.shift();
       redo = [];
       render();
       idle = persist();
@@ -325,7 +537,14 @@ export async function mountWorkbook(host, data, config = {}) {
     });
   }
   function fill() {
-    const [top] = bounds();
+    const [top, left, bottom, right] = bounds();
+    if ((bottom - top + 1) * (right - left + 1) > 50000) {
+      message(
+        "Fill a smaller range at a time; the sheet can keep growing.",
+        true,
+      );
+      return;
+    }
     change(() => {
       for (const [r, c] of selection())
         if (r !== top && editable(r, c))
@@ -353,7 +572,12 @@ export async function mountWorkbook(host, data, config = {}) {
     if (e.key === "Delete") {
       e.preventDefault();
       change(() =>
-        selection()
+        Object.keys(state.cells)
+          .map(coordinates)
+          .filter(([r, c]) => {
+            const [r1, c1, r2, c2] = bounds();
+            return r >= r1 && r <= r2 && c >= c1 && c <= c2;
+          })
           .filter(([r, c]) => editable(r, c))
           .forEach(([r, c]) => set(r, c, "")),
       );
@@ -392,17 +616,18 @@ export async function mountWorkbook(host, data, config = {}) {
       nr--;
     }
     if (
+      inputs[r]?.[c] &&
       inputs[r][c].value !==
-      String(calculator(state.cells, state.rows, state.columns)(ref(r, c)))
+        String(calculator(state.cells, state.rows, state.columns)(ref(r, c)))
     ) {
       inputs[r][c].blur();
       idle.then(() => {
         select(nr, nc);
-        inputs[selected[0]][selected[1]].focus();
+        focusCell(...selected);
       });
     } else {
       select(nr, nc, e.shiftKey && e.key.startsWith("Arrow"));
-      inputs[selected[0]][selected[1]].focus();
+      focusCell(...selected);
     }
   }
   grid.addEventListener("keydown", (event) => {
@@ -413,12 +638,30 @@ export async function mountWorkbook(host, data, config = {}) {
     if (e.key === "Enter") {
       e.preventDefault();
       bar.blur();
-      idle.then(() => inputs[selected[0]][selected[1]].focus());
+      idle.then(() => focusCell(...selected));
     }
   };
   host.querySelector(".workbook-ribbon").onclick = (e) => {
     const action = e.target.closest("button")?.dataset.action;
     if (!action || busy) return;
+    if (action === "working-row") {
+      change(() => {
+        state.rows++;
+      });
+      idle.then(() => {
+        select(state.rows - 1, 0);
+        focusCell(...selected);
+      });
+    }
+    if (action === "working-column") {
+      change(() => {
+        state.columns++;
+      });
+      idle.then(() => {
+        select(0, state.columns - 1);
+        focusCell(...selected);
+      });
+    }
     if (action === "add-row") {
       if (bound) config.addStudent?.();
       else structure(0, state.rows, 1);
@@ -474,8 +717,15 @@ export async function mountWorkbook(host, data, config = {}) {
   };
   grid.addEventListener("copy", (e) => {
     e.preventDefault();
-    const [r1, c1, r2, c2] = bounds(),
-      calc = calculator(state.cells, state.rows, state.columns),
+    const [r1, c1, r2, c2] = bounds();
+    if ((r2 - r1 + 1) * (c2 - c1 + 1) > 50000) {
+      message(
+        "Copy a smaller range at a time; the sheet can keep growing.",
+        true,
+      );
+      return;
+    }
+    const calc = calculator(state.cells, state.rows, state.columns),
       lines = [];
     for (let r = r1; r <= r2; r++) {
       const row = [];
@@ -515,12 +765,12 @@ export async function mountWorkbook(host, data, config = {}) {
           !copied.origin.every(Number.isInteger) ||
           !Array.isArray(copied.rows) ||
           !copied.rows.length ||
-          copied.rows.length > 2000 ||
+          (!config.expandable && copied.rows.length > 2000) ||
           !copied.rows.every(
             (row) =>
               Array.isArray(row) &&
               row.length > 0 &&
-              row.length <= 2000 &&
+              (config.expandable || row.length <= 2000) &&
               row.every(
                 (value) => typeof value === "string" && value.length <= 1000,
               ),
@@ -541,13 +791,17 @@ export async function mountWorkbook(host, data, config = {}) {
         return;
       }
     }
-    if (lines.reduce((n, row) => n + row.length, 0) > 2000) {
+    if (
+      !config.expandable &&
+      lines.reduce((n, row) => n + row.length, 0) > 2000
+    ) {
       message("Paste at most 2,000 cells at once", true);
       return;
     }
     change(() => {
       if (
         bound &&
+        !config.expandable &&
         (selected[0] + lines.length > state.rows ||
           selected[1] + Math.max(...lines.map((row) => row.length)) >
             state.columns)

@@ -729,7 +729,7 @@ test("Name header class dropdown autofills roster, paper headers and actual mark
   const cell = (address) =>
     page.getByRole("textbox", { name: address, exact: true });
   await expect(cell("A2")).toHaveValue("Same Name · Class A · 01");
-  await expect(cell("A3")).toHaveCount(0);
+  await expect(cell("A3")).toHaveValue("");
   const headers = await page
     .locator("tbody tr:first-child td input")
     .evaluateAll((inputs) => inputs.map((i) => i.value));
@@ -795,7 +795,7 @@ test("Name header class dropdown autofills roster, paper headers and actual mark
     .selectOption(empty.id);
   await expect(
     page.getByText(
-      "No active students in this class. Add a student row to get started.",
+      "No active students in this class. Add a student row or use the blank working rows below.",
       { exact: true },
     ),
   ).toBeVisible();
@@ -828,7 +828,7 @@ test("Name header class dropdown autofills roster, paper headers and actual mark
   ).toBeTruthy();
 });
 
-test("Name class picker stays usable when the all-students roster exceeds worksheet limits", async ({
+test("large rosters load without a cap and render a bounded window", async ({
   page,
 }) => {
   const classId = "123456789012345678901234";
@@ -847,11 +847,17 @@ test("Name class picker stays usable when the all-students roster exceeds worksh
   });
   await signIn(page);
   await expect(
-    page.getByText(
-      "This roster is too large to display at once. Use the Name header dropdown to select a smaller class.",
-      { exact: true },
-    ),
-  ).toBeVisible();
+    page.getByRole("textbox", { name: "A2", exact: true }),
+  ).toHaveValue("Roster student 000");
+  expect(await page.locator(".workbook-grid input").count()).toBeLessThan(1000);
+  const jump = page.getByRole("textbox", { name: "Go to cell", exact: true });
+  await jump.fill("A502");
+  await jump.press("Enter");
+  await expect(
+    page.getByRole("textbox", { name: "A502", exact: true }),
+  ).toHaveValue("Roster student 500");
+  await jump.fill("A1");
+  await jump.press("Enter");
   await page.getByLabel("Choose class", { exact: true }).click();
   await page
     .getByRole("combobox", { name: "Select class", exact: true })
@@ -861,5 +867,162 @@ test("Name class picker stays usable when the all-students roster exceeds worksh
   ).toHaveValue("Roster student 000");
   await expect(
     page.getByRole("textbox", { name: "A3", exact: true }),
-  ).toHaveCount(0);
+  ).toHaveValue("");
+});
+
+test("working rows and columns expand, save, reload, and feed actual mark formulas", async ({
+  page,
+}) => {
+  await signIn(page);
+  await expect(
+    page.getByRole("textbox", { name: "Name header", exact: true }),
+  ).toBeVisible();
+  const saved = () =>
+    expect(page.locator(".workbook-status")).toHaveText("All changes saved");
+  const jump = async (address) => {
+    const box = page.getByRole("textbox", { name: "Go to cell", exact: true });
+    await box.fill(address);
+    await box.press("Enter");
+    await saved();
+    await expect(
+      page.getByRole("textbox", { name: address, exact: true }),
+    ).toBeVisible();
+  };
+  const table = page.getByRole("table", {
+    name: "Flexible Excel-style worksheet",
+    exact: true,
+  });
+  const rows = Number(await table.getAttribute("aria-rowcount")),
+    columns = Number(await table.getAttribute("aria-colcount"));
+  await page.getByRole("button", { name: "Add row", exact: true }).click();
+  await saved();
+  await expect(table).toHaveAttribute("aria-rowcount", String(rows + 1));
+  await page.getByRole("button", { name: "Add column", exact: true }).click();
+  await saved();
+  await expect(table).toHaveAttribute("aria-colcount", String(columns + 1));
+  await jump("DW650");
+  const distant = page.getByRole("textbox", { name: "DW650", exact: true });
+  await distant.fill("30");
+  await distant.press("Tab");
+  await saved();
+  expect(await page.locator(".workbook-grid input").count()).toBeLessThan(1100);
+  await jump("B2");
+  const mark = page.getByRole("textbox", { name: "B2", exact: true });
+  await mark.fill("=DW650");
+  await mark.press("Tab");
+  await saved();
+  await expect(mark).toHaveValue("30");
+  await page.reload();
+  await jump("DW650");
+  await expect(distant).toHaveValue("30");
+  await distant.fill("25");
+  await distant.press("Tab");
+  await saved();
+  await jump("B2");
+  await expect(mark).toHaveValue("25");
+  await jump("DW1");
+  const header = page.getByRole("textbox", { name: "DW1", exact: true });
+  await header.fill("Practice calculations");
+  await header.press("Tab");
+  await saved();
+  await page.reload();
+  await jump("DW1");
+  await expect(header).toHaveValue("Practice calculations");
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await jump("DW650");
+  await page.locator("h1").click();
+  await page.evaluate(() => scrollTo(0, 0));
+  await page.screenshot({
+    path: "docs/screenshots/expandable-worksheet.png",
+    fullPage: true,
+  });
+});
+
+test("large TSV paste grows the sheet and saves working values in batches", async ({
+  page,
+}) => {
+  await signIn(page);
+  const box = page.getByRole("textbox", { name: "Go to cell", exact: true });
+  await box.fill("AA20");
+  await box.press("Enter");
+  await expect(page.locator(".workbook-status")).toHaveText(
+    "All changes saved",
+  );
+  const start = page.getByRole("textbox", { name: "AA20", exact: true });
+  await expect(start).toBeVisible();
+  await start.evaluate((el) => {
+    const data = new DataTransfer();
+    data.setData(
+      "text/plain",
+      Array.from({ length: 3000 }, (_, i) => String(i)).join("\n"),
+    );
+    el.dispatchEvent(
+      new ClipboardEvent("paste", {
+        clipboardData: data,
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+  });
+  await expect(page.locator(".workbook-status")).toHaveText(
+    "All changes saved",
+    { timeout: 15000 },
+  );
+  await box.fill("AA3019");
+  await box.press("Enter");
+  await expect(
+    page.getByRole("textbox", { name: "AA3019", exact: true }),
+  ).toHaveValue("2999");
+  await page.reload();
+  await box.fill("AA3019");
+  await box.press("Enter");
+  await expect(
+    page.getByRole("textbox", { name: "AA3019", exact: true }),
+  ).toHaveValue("2999");
+  expect(await page.locator(".workbook-grid input").count()).toBeLessThan(1100);
+});
+
+test("very distant cells remain editable without rendering the full sheet", async ({
+  page,
+}) => {
+  await signIn(page);
+  await expect(
+    page.getByRole("textbox", { name: "Name header", exact: true }),
+  ).toBeVisible();
+  const address = await page.evaluate(
+    async () => (await import("/formulas.js")).columnName(200000) + "2000000",
+  );
+  const box = page.getByRole("textbox", { name: "Go to cell", exact: true });
+  await box.fill(address);
+  await box.press("Enter");
+  await expect(page.locator(".workbook-status")).toHaveText(
+    "All changes saved",
+  );
+  const cell = page.getByRole("textbox", { name: address, exact: true });
+  await expect(cell).toBeVisible();
+  await expect(cell).toBeFocused();
+  await expect
+    .poll(() =>
+      cell.evaluate((el) => {
+        const cell = el.getBoundingClientRect(),
+          grid = el.closest(".workbook-grid").getBoundingClientRect();
+        return (
+          cell.top >= grid.top &&
+          cell.bottom <= grid.bottom + 1 &&
+          cell.left >= grid.left &&
+          cell.right <= grid.right + 1
+        );
+      }),
+    )
+    .toBeTruthy();
+  await cell.fill("Distant working note");
+  await cell.press("Tab");
+  await expect(page.locator(".workbook-status")).toHaveText(
+    "All changes saved",
+  );
+  expect(await page.locator(".workbook-grid input").count()).toBeLessThan(1100);
+  await page.reload();
+  await box.fill(address);
+  await box.press("Enter");
+  await expect(cell).toHaveValue("Distant working note");
 });
