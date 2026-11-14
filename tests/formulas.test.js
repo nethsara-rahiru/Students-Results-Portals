@@ -135,3 +135,51 @@ test("large sparse formula ranges and additional cell references work beyond old
     "=#REF!",
   );
 });
+
+test("function completion is formula-only and handles nested prefixes", async () => {
+  const { suggestionsFor } = await import("../public/formula-entry.js");
+  assert.ok(suggestionsFor("=").some(([name]) => name === "AVERAGE"));
+  assert.deepEqual(
+    suggestionsFor("=av").map(([name]) => name),
+    ["AVERAGE"],
+  );
+  assert.deepEqual(
+    suggestionsFor("=ROUND(SU").map(([name]) => name),
+    ["SUM"],
+  );
+  assert.deepEqual(suggestionsFor("ordinary student name"), []);
+  assert.deepEqual(suggestionsFor('=IF(TRUE,"A+SU'), []);
+});
+test("promoted column aliases preserve working references and remove the duplicate working column", async () => {
+  const { worksheetModel } = await import("../public/worksheet-model.js");
+  const { bindingsFor, rebaseFormula } =
+    await import("../public/worksheet-references.js");
+  const student = { _id: "student-a", name: "Learner", active: true },
+    paper = { _id: "paper-a", name: "Paper", max: 100 },
+    promoted = {
+      _id: "paper-final",
+      name: "Final",
+      max: 100,
+      worksheetSource: { scope: "all", columnKey: "x0" },
+    };
+  const formula = "=C2",
+    formulaBindings = bindingsFor(formula, [student], [paper], true, "all");
+  const model = worksheetModel(
+    { students: [student], papers: [paper, promoted], marks: [] },
+    { extraRows: 10, extraColumns: 3, cells: [] },
+    "all",
+  );
+  assert.equal(model.columnFor("x0"), 2);
+  assert.equal(model.columnFor("x1"), 3);
+  assert.equal(model.columnKey(3), "x1");
+  assert.equal(model.state.columns, 5);
+  assert.equal(
+    rebaseFormula(
+      { formula, formulaBindings },
+      [student],
+      [paper, promoted],
+      "all",
+    ),
+    "=C2",
+  );
+});

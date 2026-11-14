@@ -160,9 +160,7 @@ test("teacher worksheet: named headers, mark entry, paste, fill, undo, validatio
   await page.getByLabel("Profile label").fill("Group C");
   await page.getByRole("button", { name: "Save changes", exact: true }).click();
   await expect(cell("A4")).toHaveValue(/New Student/);
-  await page
-    .getByRole("button", { name: "Add paper column", exact: true })
-    .click();
+  await page.getByRole("button", { name: "Add column", exact: true }).click();
   await page.getByLabel("Paper name", { exact: true }).fill("Draft Paper 03");
   await page.getByRole("button", { name: "Save changes", exact: true }).click();
   await expect(cell("D1")).toHaveValue("Draft Paper 03");
@@ -778,9 +776,7 @@ test("Name header class dropdown autofills roster, paper headers and actual mark
       .getByRole("combobox", { name: "Class", exact: true }),
   ).toHaveValue(a.id);
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
-  await page
-    .getByRole("button", { name: "Add paper column", exact: true })
-    .click();
+  await page.getByRole("button", { name: "Add column", exact: true }).click();
   await expect(
     page
       .getByRole("dialog")
@@ -897,7 +893,9 @@ test("working rows and columns expand, save, reload, and feed actual mark formul
   await page.getByRole("button", { name: "Add row", exact: true }).click();
   await saved();
   await expect(table).toHaveAttribute("aria-rowcount", String(rows + 1));
-  await page.getByRole("button", { name: "Add column", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Add working column", exact: true })
+    .click();
   await saved();
   await expect(table).toHaveAttribute("aria-colcount", String(columns + 1));
   await jump("DW650");
@@ -1025,4 +1023,331 @@ test("very distant cells remain editable without rendering the full sheet", asyn
   await box.fill(address);
   await box.press("Enter");
   await expect(cell).toHaveValue("Distant working note");
+});
+
+async function firstWorkingCell(page) {
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await expect(
+    page.getByRole("textbox", { name: "Name header", exact: true }),
+  ).toBeVisible();
+  for (const [address, value] of [
+    ["B2", "20"],
+    ["C2", "30"],
+  ]) {
+    const cell = page.getByRole("textbox", { name: address, exact: true });
+    if ((await cell.inputValue()) === "") {
+      await cell.fill(value);
+      await cell.press("Tab");
+      await expect(page.locator(".workbook-status")).toHaveText(
+        "All changes saved",
+      );
+    }
+  }
+  const info = await page.evaluate(async () => {
+    const data = await (await import("/client.js")).api("/admin/data");
+    return {
+      column: (await import("/formulas.js")).columnName(data.papers.length + 1),
+      student: data.students
+        .filter((s) => s.active)
+        .sort(
+          (a, b) =>
+            a.name.localeCompare(b.name, "en") || a._id.localeCompare(b._id),
+        )[0]._id,
+    };
+  });
+  const address = info.column + "2",
+    box = page.getByRole("textbox", { name: "Go to cell", exact: true });
+  await box.fill(address);
+  await box.press("Enter");
+  await expect(
+    page.getByRole("textbox", { name: address, exact: true }),
+  ).toBeVisible();
+  return { ...info, address };
+}
+
+test("formula entry suggests functions and inserts clicked cell references without saving the draft", async ({
+  page,
+}) => {
+  await signIn(page);
+  const { address } = await firstWorkingCell(page),
+    editor = page.getByRole("textbox", { name: address, exact: true }),
+    bar = page.getByRole("textbox", {
+      name: "Cell formula or value",
+      exact: true,
+    });
+  const expected =
+    (Number(
+      await page.getByRole("textbox", { name: "B2", exact: true }).inputValue(),
+    ) +
+      Number(
+        await page
+          .getByRole("textbox", { name: "C2", exact: true })
+          .inputValue(),
+      )) /
+    2;
+  await editor.press("=");
+  await expect(
+    page.getByRole("listbox", { name: "Formula functions" }),
+  ).toBeVisible();
+  await editor.pressSequentially("av");
+  await expect(page.getByRole("option", { name: /^AVERAGE/ })).toBeVisible();
+  await editor.press("Tab");
+  await expect(editor).toHaveValue("=AVERAGE(");
+  let writes = 0;
+  page.on("request", (request) => {
+    if (request.method() === "PUT" && request.url().includes("/api/admin/"))
+      writes++;
+  });
+  await page
+    .locator(".workbook-grid")
+    .evaluate((grid) => (grid.scrollLeft = 0));
+  await page.getByRole("textbox", { name: "B2", exact: true }).click();
+  await expect(bar).toHaveValue("=AVERAGE(B2");
+  await page.locator("input:focus").pressSequentially(":");
+  await page.getByRole("textbox", { name: "C2", exact: true }).click();
+  await expect(bar).toHaveValue("=AVERAGE(B2:C2");
+  await expect(bar).toHaveValue("=AVERAGE(B2:C2");
+  expect(writes).toBe(0);
+  await page.locator("input:focus").pressSequentially(")");
+  await page.locator("input:focus").press("Enter");
+  await expect(page.locator(".workbook-status")).toHaveText(
+    "All changes saved",
+  );
+  await expect(editor).toHaveValue(String(expected));
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await editor.click();
+  await bar.click();
+  await bar.press("End");
+  await bar.pressSequentially("+");
+  await expect(
+    page.getByRole("listbox", { name: "Formula functions" }),
+  ).toBeVisible();
+  await page.locator("h1").scrollIntoViewIfNeeded();
+  await page.screenshot({
+    path: "docs/screenshots/formula-functions.png",
+    fullPage: true,
+  });
+  await bar.press("Escape");
+});
+
+test("a saved average column converts to a published paper and recalculates for student results", async ({
+  page,
+}) => {
+  await signIn(page);
+  const { address, column, student } = await firstWorkingCell(page);
+  const editor = page.getByRole("textbox", { name: address, exact: true });
+  await editor.fill("=ROUND(AVERAGE(B2:C2),2)");
+  await editor.press("Enter");
+  await expect(page.locator(".workbook-status")).toHaveText(
+    "All changes saved",
+  );
+  const expected = Number(await editor.inputValue());
+  const box = page.getByRole("textbox", { name: "Go to cell", exact: true });
+  await box.fill(column + "1");
+  await box.press("Enter");
+  const header = page.getByRole("textbox", { name: column + "1", exact: true });
+  await header.fill("Calculated final average");
+  await header.press("Enter");
+  await expect(page.locator(".workbook-status")).toHaveText(
+    "All changes saved",
+  );
+  await page
+    .getByRole("button", {
+      name: "Make column " + column + " a paper",
+      exact: true,
+    })
+    .click();
+  await expect(
+    page.getByRole("dialog", { name: "Create calculated paper" }),
+  ).toBeVisible();
+  await page
+    .getByRole("combobox", { name: "Publication status", exact: true })
+    .selectOption("published");
+  await page.getByRole("button", { name: "Save changes", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(header).toHaveValue("Calculated final average");
+  await expect(header).toHaveAttribute("readonly", "");
+  await expect(editor).toHaveValue(String(expected));
+  const results = await (
+    await page.request.get("/api/results/" + student)
+  ).json();
+  expect(results.papers.at(-1).name).toBe("Calculated final average");
+  expect(results.papers.at(-1).value).toBe(expected);
+  expect(results.papers.at(-1).formula).toBeUndefined();
+  const parent = page.getByRole("textbox", { name: "B2", exact: true });
+  await parent.fill("40");
+  await parent.press("Tab");
+  await expect(page.locator(".workbook-status")).toHaveText(
+    "All changes saved",
+  );
+  const updated =
+    (Number(await parent.inputValue()) +
+      Number(
+        await page
+          .getByRole("textbox", { name: "C2", exact: true })
+          .inputValue(),
+      )) /
+    2;
+  await expect(editor).toHaveValue(String(updated));
+  await page.reload();
+  await expect(editor).toHaveValue(String(updated));
+  const live = await (await page.request.get("/api/results/" + student)).json();
+  expect(live.papers.at(-1).value).toBe(updated);
+  const studentPage = await page.context().newPage();
+  await studentPage.emulateMedia({ reducedMotion: "reduce" });
+  await studentPage.goto("/");
+  await studentPage.getByLabel("Full name", { exact: true }).fill(live.student);
+  await studentPage.getByLabel("Full name", { exact: true }).press("Enter");
+  await studentPage
+    .getByRole("button", { name: new RegExp(live.student + " ·") })
+    .click();
+  await studentPage
+    .getByRole("button", { name: "Discover my results" })
+    .click();
+  for (let index = 0; index < live.papers.length; index++) {
+    const paper = live.papers[index];
+    await studentPage
+      .getByRole("button", { name: new RegExp(paper.name) })
+      .click();
+    await expect(studentPage.locator("#score")).toHaveAttribute(
+      "aria-label",
+      "Score " + paper.value,
+    );
+    if (index < live.papers.length - 1)
+      await studentPage.getByRole("button", { name: "Next paper" }).click();
+  }
+  await expect(studentPage.locator(".badge")).toBeVisible();
+  await studentPage.screenshot({
+    path: "docs/screenshots/calculated-student-result.png",
+    fullPage: true,
+  });
+  await studentPage.close();
+
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.locator("h1").click();
+  await page.evaluate(() => scrollTo(0, 0));
+  await page.screenshot({
+    path: "docs/screenshots/calculated-paper.png",
+    fullPage: true,
+  });
+});
+
+test("Add column creates a real draft paper that can be published with a calculated result", async ({
+  page,
+}) => {
+  await signIn(page);
+  await firstWorkingCell(page);
+  await expect(
+    page.getByRole("textbox", { name: "Name header", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Add column", exact: true }).click();
+  await page
+    .getByLabel("Paper name", { exact: true })
+    .fill("Manually added average");
+  await page.getByRole("button", { name: "Save changes", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  const info = await page.evaluate(async () => {
+    const data = await (await import("/client.js")).api("/admin/data"),
+      paper = data.papers.find((p) => p.name === "Manually added average");
+    return {
+      column: (await import("/formulas.js")).columnName(
+        data.papers.indexOf(paper) + 1,
+      ),
+      paper: paper._id,
+      student: data.students
+        .filter((s) => s.active)
+        .sort(
+          (a, b) =>
+            a.name.localeCompare(b.name, "en") || a._id.localeCompare(b._id),
+        )[0]._id,
+    };
+  });
+  const addressBox = page.getByRole("textbox", {
+    name: "Go to cell",
+    exact: true,
+  });
+  await addressBox.fill(info.column + "2");
+  await addressBox.press("Enter");
+  const cell = page.getByRole("textbox", {
+    name: info.column + "2",
+    exact: true,
+  });
+  await cell.fill("=ROUND(AVERAGE(B2:C2),2)");
+  await cell.press("Enter");
+  await expect(page.locator(".workbook-status")).toHaveText(
+    "All changes saved",
+  );
+  expect(
+    (
+      await (await page.request.get("/api/results/" + info.student)).json()
+    ).papers.some((p) => p.id === info.paper),
+  ).toBeFalsy();
+  await page.getByRole("link", { name: "Papers", exact: true }).click();
+  const row = page
+    .locator(".management-row")
+    .filter({ hasText: "Manually added average" });
+  await row.getByRole("button", { name: "Edit / publish" }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("combobox", { name: "Publication status", exact: true })
+    .selectOption("published");
+  await page.getByRole("button", { name: "Save changes", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  expect(
+    (
+      await (await page.request.get("/api/results/" + info.student)).json()
+    ).papers.some((p) => p.id === info.paper),
+  ).toBeTruthy();
+});
+
+test("bare equals and formula-bar editing support point-and-click references and Escape cancellation", async ({
+  page,
+}) => {
+  await signIn(page);
+  const { address } = await firstWorkingCell(page),
+    editor = page.getByRole("textbox", { name: address, exact: true }),
+    bar = page.getByRole("textbox", {
+      name: "Cell formula or value",
+      exact: true,
+    });
+  await editor.press("=");
+  await page
+    .locator(".workbook-grid")
+    .evaluate((grid) => (grid.scrollLeft = 0));
+  await page.getByRole("textbox", { name: "B2", exact: true }).click();
+  await expect(bar).toHaveValue("=B2");
+  await page.locator("input:focus").press("Escape");
+  await editor.click();
+  await bar.click();
+  await bar.fill("=SU");
+  await expect(page.getByRole("option", { name: /^SUM / })).toBeVisible();
+  await bar.press("Enter");
+  await expect(bar).toHaveValue("=SUM(");
+  await page
+    .locator(".workbook-grid")
+    .evaluate((grid) => (grid.scrollLeft = 0));
+  await page.getByRole("textbox", { name: "B2", exact: true }).click();
+  await bar.pressSequentially(",");
+  await page.getByRole("textbox", { name: "C2", exact: true }).click();
+  await bar.pressSequentially(")");
+  await expect(bar).toHaveValue("=SUM(B2,C2)");
+  const expected =
+    Number(
+      await page.getByRole("textbox", { name: "B2", exact: true }).inputValue(),
+    ) +
+    Number(
+      await page.getByRole("textbox", { name: "C2", exact: true }).inputValue(),
+    );
+  await bar.press("Enter");
+  await expect(page.locator(".workbook-status")).toHaveText(
+    "All changes saved",
+  );
+  await expect(editor).toHaveValue(String(expected));
+  await editor.click();
+  await bar.click();
+  await bar.fill("=AVERAGE(");
+  await bar.press("Escape");
+  await expect(bar).toHaveValue("=SUM(B2,C2)");
+  await page.reload();
+  await expect(editor).toHaveValue(String(expected));
 });

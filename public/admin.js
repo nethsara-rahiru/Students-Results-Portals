@@ -193,17 +193,37 @@ async function admin() {
         ),
     );
   }
-  function paperForm(p, create = false) {
+  function paperForm(p, create = false, source = null) {
     dialog(
-      p && !create ? "Edit paper" : "Create paper",
-      field("Paper name", "name", p?.name || "", "text", "required") +
-        `<div class="form-grid">${field("Subject", "subject", p?.subject || "")}${field("Grade", "grade", p?.grade || "")}${field("Paper date", "date", p?.date || "", "date")}${field("Maximum marks", "max", p?.max || 100, "number", 'min="1" max="10000" required')}</div><label>Class<select name="classId">${options(data.classes, p?.classId)}</select></label><label>Publication status<select name="state">${["draft", "published", "unpublished"].map((s) => `<option ${s === (p?.state || "draft") ? "selected" : ""}>${s}</option>`).join("")}</select></label><p class="privacy">Publishing makes entered marks accessible in the configured student access mode. Verify marks before publishing.</p>`,
-      (f) =>
-        api(
-          "/admin/papers" + (p && !create ? "/" + p._id : ""),
-          { ...f, max: Number(f.max), classId: f.classId || null },
+      source
+        ? "Create calculated paper"
+        : p && !create
+          ? "Edit paper"
+          : "Create paper",
+      (source
+        ? '<p class="muted">Convert this working column into a paper. Its student results and formulas are retained. Publish only after reviewing the calculated marks.</p>'
+        : "") +
+        field("Paper name", "name", p?.name || "", "text", "required") +
+        `<div class="form-grid">${field("Subject", "subject", p?.subject || "")}${field("Grade", "grade", p?.grade || "")}${field("Paper date", "date", p?.date || "", "date")}${field("Maximum marks", "max", p?.max || 100, "number", 'min="1" max="10000" required')}</div><label>Class<select name="classId" ${source ? "disabled" : ""}>${options(data.classes, p?.classId)}</select></label><label>Publication status<select name="state">${["draft", "published", "unpublished"].map((s) => `<option ${s === (p?.state || "draft") ? "selected" : ""}>${s}</option>`).join("")}</select></label><p class="privacy">Publishing makes entered marks accessible in the configured student access mode. Verify marks before publishing.</p>`,
+      async (f) => {
+        const result = await api(
+          source
+            ? "/admin/worksheet-paper"
+            : "/admin/papers" + (p && !create ? "/" + p._id : ""),
+          {
+            ...f,
+            max: Number(f.max),
+            classId: source ? p?.classId || null : f.classId || null,
+            ...(source
+              ? { scope: source.scope, columnKey: source.columnKey }
+              : {}),
+          },
           p && !create ? "PATCH" : "POST",
-        ),
+        );
+        if (create || !p)
+          sessionStorage.setItem("levelup-new-paper", result.id);
+        return result;
+      },
     );
   }
   async function render() {
@@ -214,7 +234,12 @@ async function admin() {
         data,
         {
           addStudent: (classId) => studentForm({ classId, active: true }, true),
-          addPaper: (classId) => paperForm({ classId }, true),
+          addPaper: (classId, source) =>
+            paperForm(
+              { classId, name: source?.name || "", max: source?.max || 100 },
+              true,
+              source,
+            ),
         },
       );
     } else if (page === "students") {
