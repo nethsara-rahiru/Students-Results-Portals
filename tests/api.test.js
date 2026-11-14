@@ -2,7 +2,7 @@ import { before, after, test } from "node:test";
 import assert from "node:assert/strict";
 import request from "supertest";
 import { MongoMemoryServer } from "mongodb-memory-server";
-import { MongoClient } from "mongodb";
+import { MongoClient, ObjectId } from "mongodb";
 import bcrypt from "bcryptjs";
 import { createApp } from "../server.js";
 let mongo,
@@ -707,5 +707,216 @@ test("successful sign-ins do not consume the failed-login limit", async () => {
       )
     ).status,
     429,
+  );
+});
+
+test("working average columns become idempotent, publishable papers with validated private results", async () => {
+  const agent = request.agent(app);
+  let token = (await agent.get("/api/session")).body.csrf;
+  token = (
+    await write(
+      agent,
+      "/api/login",
+      { username: "teacher", password: "correct-password" },
+      "post",
+      token,
+    )
+  ).body.csrf;
+  const create = (url, body, method = "post") =>
+    write(agent, url, body, method, token);
+  const cls = (
+    await create("/api/admin/classes", { name: "Calculated paper class" })
+  ).body.id;
+  const student = (
+    await create("/api/admin/students", {
+      name: "Calculated Learner",
+      classId: cls,
+    })
+  ).body.id;
+  const p1 = (
+    await create("/api/admin/papers", {
+      name: "Average input 1",
+      classId: cls,
+      max: 100,
+      state: "published",
+    })
+  ).body.id;
+  const p2 = (
+    await create("/api/admin/papers", {
+      name: "Average input 2",
+      classId: cls,
+      max: 100,
+      state: "published",
+    })
+  ).body.id;
+  await create(
+    "/api/admin/marks",
+    {
+      entries: [
+        { studentId: student, paperId: p1, value: 80 },
+        { studentId: student, paperId: p2, value: 60 },
+      ],
+    },
+    "put",
+  );
+  const data = (await agent.get("/api/admin/data")).body;
+  const { worksheetModel } = await import("../public/worksheet-model.js"),
+    { columnName } = await import("../public/formulas.js"),
+    { bindingsFor } = await import("../public/worksheet-references.js");
+  const model = worksheetModel(
+    data,
+    { extraRows: 10, extraColumns: 3, cells: [] },
+    cls,
+  );
+  const one = columnName(model.paperColumns.get(p1)) + "2",
+    two = columnName(model.paperColumns.get(p2)) + "2",
+    formula = "=AVERAGE(" + one + ":" + two + ")";
+  const cell = {
+    rowKey: student,
+    columnKey: "x0",
+    value: formula,
+    formulaBindings: bindingsFor(
+      formula,
+      model.students,
+      model.papers,
+      true,
+      cls,
+    ),
+  };
+  assert.equal(
+    (
+      await create(
+        "/api/admin/worksheet-space/" + cls,
+        { extraRows: 10, extraColumns: 3, entries: [cell] },
+        "put",
+      )
+    ).status,
+    200,
+  );
+  const body = {
+    scope: cls,
+    columnKey: "x0",
+    name: "Final average",
+    max: 100,
+    state: "draft",
+  };
+  assert.equal(
+    (
+      await publicAgent
+        .post("/api/admin/worksheet-paper")
+        .set("X-CSRF-Token", publicCsrf)
+        .send(body)
+    ).status,
+    401,
+  );
+  assert.equal(
+    (await agent.post("/api/admin/worksheet-paper").send(body)).status,
+    403,
+  );
+  const response = await create("/api/admin/worksheet-paper", body);
+  assert.equal(response.status, 200);
+  const paper = response.body.id;
+  assert.equal(
+    (await publicAgent.get("/api/results/" + student)).body.papers.some(
+      (p) => p.id === paper,
+    ),
+    false,
+  );
+  const saved = (await agent.get("/api/admin/data")).body;
+  const result = saved.marks.find(
+    (m) => m.studentId === student && m.paperId === paper,
+  );
+  assert.equal(result.value, 70);
+  assert.ok(result.formula.startsWith("=AVERAGE"));
+  assert.equal(
+    (
+      await create(
+        "/api/admin/papers/" + paper,
+        { name: "Final average", max: 100, classId: cls, state: "published" },
+        "patch",
+      )
+    ).status,
+    200,
+  );
+  const visible = (await publicAgent.get("/api/results/" + student)).body
+    .papers;
+  assert.equal(visible.at(-1).id, paper);
+  assert.equal(visible.at(-1).value, 70);
+  assert.equal(visible.at(-1).formula, undefined);
+  assert.equal(
+    (await create("/api/admin/worksheet-paper", body)).body.id,
+    paper,
+  );
+  assert.equal(
+    await db.collection("papers").countDocuments({
+      "worksheetSource.scope": cls,
+      "worksheetSource.columnKey": "x0",
+    }),
+    1,
+  );
+  await create(
+    "/api/admin/worksheet-space/" + cls,
+    {
+      extraRows: 10,
+      extraColumns: 3,
+      entries: [{ rowKey: student, columnKey: "x1", value: "101" }],
+    },
+    "put",
+  );
+  assert.equal(
+    (
+      await create("/api/admin/worksheet-paper", {
+        ...body,
+        columnKey: "x1",
+        name: "Invalid final",
+      })
+    ).status,
+    400,
+  );
+  assert.equal(
+    await db.collection("papers").countDocuments({
+      "worksheetSource.scope": cls,
+      "worksheetSource.columnKey": "x1",
+    }),
+    0,
+  );
+  await db
+    .collection("papers")
+    .updateOne(
+      { _id: new ObjectId(paper) },
+      { $set: { state: "draft", worksheetImportComplete: false } },
+    );
+  assert.equal(
+    (await create("/api/admin/worksheet-paper", body)).body.id,
+    paper,
+  );
+  assert.equal(
+    (await agent.get("/api/admin/data")).body.marks.find(
+      (m) => m.studentId === student && m.paperId === paper,
+    ).value,
+    70,
+  );
+  assert.ok(
+    await db.collection("auditLogs").findOne({
+      action: "marks",
+      "changes.paperId": new ObjectId(paper),
+      "changes.before.value": 70,
+    }),
+  );
+  await create(
+    "/api/admin/papers/" + paper,
+    { name: "Final average", max: 100, classId: cls, state: "published" },
+    "patch",
+  );
+  await create(
+    "/api/admin/papers/" + paper,
+    { name: "Final average", max: 100, classId: cls, state: "unpublished" },
+    "patch",
+  );
+  assert.equal(
+    (await publicAgent.get("/api/results/" + student)).body.papers.some(
+      (p) => p.id === paper,
+    ),
+    false,
   );
 });

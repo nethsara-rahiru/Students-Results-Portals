@@ -1,4 +1,7 @@
 import "dotenv/config";
+import { worksheetModel } from "./public/worksheet-model.js";
+import { calculator, columnName } from "./public/formulas.js";
+import { bindingsFor, rebaseFormula } from "./public/worksheet-references.js";
 import { pathToFileURL } from "node:url";
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import express from "express";
@@ -126,6 +129,16 @@ export async function createApp({ db, client, config = {} }) {
     db
       .collection("worksheetCells")
       .createIndex({ scope: 1, rowKey: 1, columnKey: 1 }, { unique: true }),
+    db.collection("papers").createIndex(
+      { "worksheetSource.scope": 1, "worksheetSource.columnKey": 1 },
+      {
+        unique: true,
+        partialFilterExpression: {
+          "worksheetSource.scope": { $exists: true },
+          "worksheetSource.columnKey": { $exists: true },
+        },
+      },
+    ),
     db.collection("students").createIndex({ nameKey: 1, active: 1 }),
     db
       .collection("marks")
@@ -604,6 +617,226 @@ export async function createApp({ db, client, config = {} }) {
       }),
     );
   }
+  app.post(
+    "/api/admin/worksheet-paper",
+    wrap(async (req, res) => {
+      const scope = spaceScope.parse(req.body.scope),
+        columnKey = z
+          .string()
+          .regex(/^x(?:0|[1-9]\d*)$/)
+          .parse(req.body.columnKey);
+      const classId = scope === "all" || scope === "unassigned" ? null : scope;
+      const details = paperSchema.parse({ ...req.body, classId });
+      await checkClass(classId);
+      let paper = await db.collection("papers").findOne({
+        "worksheetSource.scope": scope,
+        "worksheetSource.columnKey": columnKey,
+      });
+      if (paper?.worksheetImportComplete)
+        return res.json({
+          id: paper._id,
+          state: paper.state,
+          count: await db
+            .collection("marks")
+            .countDocuments({ paperId: paper._id }),
+        });
+      const [students, papers, marks, space, working] = await Promise.all([
+        db.collection("students").find({ active: true }).toArray(),
+        db.collection("papers").find().sort({ order: 1, _id: 1 }).toArray(),
+        db.collection("marks").find().toArray(),
+        db.collection("worksheetSpaces").findOne({ _id: scope }),
+        db
+          .collection("worksheetCells")
+          .find({ scope }, { projection: { _id: 0, scope: 0 } })
+          .toArray(),
+      ]);
+      if (Number(columnKey.slice(1)) >= (space?.extraColumns ?? 3))
+        throw fail(400, "Select an existing working column");
+      const data = JSON.parse(JSON.stringify({ students, papers, marks }));
+      const model = worksheetModel(
+        data,
+        {
+          extraRows: space?.extraRows ?? 10,
+          extraColumns: space?.extraColumns ?? 3,
+          cells: working,
+        },
+        scope,
+      );
+      const column = model.columnFor(columnKey),
+        source = new Map(
+          working
+            .filter((cell) => cell.columnKey === columnKey)
+            .map((cell) => [cell.rowKey, cell]),
+        );
+      for (const student of model.students) {
+        const cell = source.get(student._id);
+        if (cell)
+          model.cells[
+            columnName(column) + (model.studentRows.get(student._id) + 1)
+          ] = cell.value.startsWith("=")
+            ? rebaseFormula(
+                { formula: cell.value, formulaBindings: cell.formulaBindings },
+                model.students,
+                model.papers,
+                scope,
+              )
+            : cell.value;
+      }
+      const calculate = calculator(
+          model.cells,
+          model.state.rows,
+          model.state.columns,
+        ),
+        prepared = [];
+      for (const student of model.students) {
+        const address =
+            columnName(column) + (model.studentRows.get(student._id) + 1),
+          raw = String(model.cells[address] || "").trim();
+        if (!raw) continue;
+        const formula = raw.startsWith("=") ? raw : "",
+          result = formula ? calculate(address) : raw,
+          absent = !formula && raw.toUpperCase() === "A";
+        if (
+          !absent &&
+          (typeof result === "boolean" ||
+            (typeof result === "string" && !/^\d+(\.\d+)?$/.test(result)) ||
+            !Number.isFinite(Number(result)))
+        )
+          throw fail(
+            400,
+            `${student.name}: the calculated column must contain numeric results, blank, or A for absent`,
+          );
+        const value = absent ? null : Number(result);
+        if (
+          value !== null &&
+          (value < 0 ||
+            value > details.max ||
+            Math.abs(Math.round(value * 100) - value * 100) > 1e-7)
+        )
+          throw fail(
+            400,
+            `${student.name}: mark must be between 0 and ${details.max} with up to two decimals; use ROUND in the formula`,
+          );
+        prepared.push({
+          studentId: new ObjectId(student._id),
+          value,
+          status: absent ? "absent" : "present",
+          formula,
+          formulaBindings: formula
+            ? bindingsFor(
+                formula,
+                model.students,
+                model.papers,
+                true,
+                scope,
+                model.slotForIndex,
+              )
+            : [],
+        });
+      }
+      const now = new Date();
+      if (!paper) {
+        const last = await db
+          .collection("papers")
+          .find()
+          .sort({ order: -1 })
+          .limit(1)
+          .next();
+        try {
+          paper = {
+            ...details,
+            _id: new ObjectId(),
+            state: "draft",
+            order: (last?.order ?? 0) + 1,
+            worksheetSource: { scope, columnKey },
+            worksheetImportComplete: false,
+            updatedAt: now,
+          };
+          await db.collection("papers").insertOne(paper);
+        } catch (error) {
+          if (error.code !== 11000) throw error;
+          paper = await db.collection("papers").findOne({
+            "worksheetSource.scope": scope,
+            "worksheetSource.columnKey": columnKey,
+          });
+          if (paper.worksheetImportComplete)
+            return res.json({ id: paper._id, state: paper.state });
+        }
+      }
+      if (prepared.length)
+        await db.collection("marks").bulkWrite(
+          prepared.map((entry) => ({
+            updateOne: {
+              filter: { studentId: entry.studentId, paperId: paper._id },
+              update: {
+                $set: {
+                  ...entry,
+                  paperId: paper._id,
+                  updatedAt: now,
+                  updatedBy: req.session.admin,
+                },
+              },
+              upsert: true,
+            },
+          })),
+        );
+      await audit(req, "create-calculated", "paper", {
+        id: paper._id,
+        source: paper.worksheetSource,
+        count: prepared.length,
+        max: details.max,
+      });
+      const oldMarks = new Map(
+        marks.map((mark) => [
+          String(mark.studentId) + ":" + String(mark.paperId),
+          mark,
+        ]),
+      );
+      if (prepared.length)
+        await audit(
+          req,
+          "marks",
+          "marks",
+          prepared.map((entry) => {
+            const before = oldMarks.get(
+              String(entry.studentId) + ":" + String(paper._id),
+            );
+            return {
+              ...entry,
+              paperId: paper._id,
+              before: before
+                ? {
+                    value: before.value,
+                    status: before.status,
+                    formula: before.formula || "",
+                  }
+                : null,
+              after: {
+                value: entry.value,
+                status: entry.status,
+                formula: entry.formula,
+              },
+            };
+          }),
+        );
+      await db.collection("worksheetCells").deleteMany({
+        scope,
+        columnKey,
+        rowKey: { $in: ["h", ...model.students.map((s) => s._id)] },
+      });
+      await db.collection("papers").updateOne(
+        { _id: paper._id },
+        {
+          $set: {
+            ...details,
+            worksheetImportComplete: true,
+            updatedAt: new Date(),
+          },
+        },
+      );
+      res.json({ id: paper._id, state: details.state, count: prepared.length });
+    }),
+  );
   app.put(
     "/api/admin/paper-order",
     wrap(async (req, res) => {
