@@ -150,11 +150,14 @@ export class ScoreEffects {
         this.animations.push(
           glass.animate(
             [
-              { opacity: 0, transform: "translate(-50%,-50%) scale(.06)" },
+              {
+                opacity: index ? 0 : 0.18,
+                transform: "translate(-50%,-50%) scale(.12)",
+              },
               {
                 opacity: index ? 0.38 : 0.8,
                 transform: "translate(-50%,-50%) scale(.34)",
-                offset: 0.22,
+                offset: 0.12,
               },
               {
                 opacity: 0.28,
@@ -204,12 +207,13 @@ export class ScoreEffects {
           [
             { transform: "translate(-50%,-50%) scale(1)" },
             {
-              transform: `translate(-50%,-50%) scale(${this.last ? 1.09 : 1.055})`,
-              offset: 0.35,
+              transform: `translate(-50%,-50%) scale(${this.last ? 1.28 : 1.22})`,
+              offset: 0.2,
             },
+            { transform: "translate(-50%,-50%) scale(.98)", offset: 0.65 },
             { transform: "translate(-50%,-50%) scale(1)" },
           ],
-          { duration: 850, easing: "cubic-bezier(.2,.7,.2,1)" },
+          { duration: 620, easing: "cubic-bezier(.2,.7,.2,1)" },
         ),
       );
     }

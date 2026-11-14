@@ -626,6 +626,7 @@ export class StudentJourney {
         reduced: this.media.matches,
         duration: last ? 2900 : 2500,
         onFinish: () => {
+          this.scoreEffects.settle({ skip: this.skipEffects });
           if (motionReady) this.complete(last);
           else scoreFinished = true;
         },

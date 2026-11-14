@@ -38,11 +38,12 @@ export function animateScore(
     host.append(slot);
     return { strip, target: 40 + Number(char) };
   });
-  let timer;
+  let timer, frame;
   const finish = () => {
     if (stopped) return;
     stopped = true;
     clearTimeout(timer);
+    cancelAnimationFrame(frame);
     strips.forEach((s) => {
       if (s) {
         s.strip.style.transition = "none";
@@ -53,21 +54,28 @@ export function animateScore(
     host.dataset.complete = "true";
     onFinish();
   };
-  requestAnimationFrame(() =>
-    requestAnimationFrame(() => {
+  // One animation clock drives both the reels and their completion effects.
+  // A CSS ease that flattens too early makes the score look stopped while a
+  // separate timeout is still waiting to start the blast.
+  if (reduced) timer = setTimeout(finish, 0);
+  else {
+    let started;
+    const roll = (now) => {
       if (stopped) return;
-      strips.forEach((s, i) => {
-        if (s) {
-          s.strip.style.transition = `transform ${reduced ? 0 : duration + i * 90}ms cubic-bezier(.12,.65,.15,1)`;
-          s.strip.style.transform = `translateY(-${s.target}em)`;
-        }
-      });
-    }),
-  );
-  timer = setTimeout(finish, reduced ? 0 : duration + digits.length * 90 + 30);
+      started ??= now;
+      const progress = Math.min(1, (now - started) / duration);
+      if (progress === 1) return finish();
+      const eased = 1 - Math.pow(1 - progress, 1.6);
+      for (const s of strips)
+        if (s) s.strip.style.transform = `translateY(-${s.target * eased}em)`;
+      frame = requestAnimationFrame(roll);
+    };
+    frame = requestAnimationFrame(roll);
+  }
   finish.cancel = () => {
     stopped = true;
     clearTimeout(timer);
+    cancelAnimationFrame(frame);
   };
   return finish;
 }

@@ -1649,3 +1649,90 @@ test("spinner colours develop gradually and the glass blast expands beyond the v
     /.+/,
   );
 });
+
+test("the final reel movement, glass blast and number pop share one completion frame", async ({
+  page,
+}) => {
+  test.setTimeout(30000);
+  await page.route("**/api/results/*", (route) =>
+    route.fulfill({
+      json: {
+        student: "Single Student",
+        papers: [
+          { id: "sync-a", name: "Sync paper one", max: 100, value: 60 },
+          { id: "sync-b", name: "Sync paper two", max: 100, value: 85 },
+        ],
+      },
+    }),
+  );
+  await identify(page, "Single Student");
+  await page.evaluate(() => {
+    window.revealTiming = [];
+    const original = Element.prototype.animate;
+    Element.prototype.animate = function (...args) {
+      if (this.matches(".score-glass:not(.score-glass-echo),#score"))
+        window.revealTiming.push({
+          kind: this.id === "score" ? "pop" : "blast",
+          at: performance.now(),
+          frames: args[0],
+          options: args[1],
+        });
+      return original.apply(this, args);
+    };
+    const score = document.querySelector("#score");
+    new MutationObserver((records) => {
+      if (
+        records.some((r) => r.attributeName === "data-complete") &&
+        score.dataset.complete === "true"
+      )
+        window.revealTiming.push({ kind: "stop", at: performance.now() });
+    }).observe(score, { attributes: true });
+  });
+  for (const [index, value] of [60, 85].entries()) {
+    await page.evaluate(() => {
+      window.revealTiming = [];
+      window.lastReelChange = 0;
+      let previous;
+      const watch = () => {
+        const score = document.querySelector("#score"),
+          strip = score.querySelector(".digit-strip");
+        const y = strip
+          ? new DOMMatrix(getComputedStyle(strip).transform).m42
+          : 0;
+        if (previous !== undefined && Math.abs(y - previous) > 0.1)
+          window.lastReelChange = performance.now();
+        previous = y;
+        if (score.dataset.complete !== "true") requestAnimationFrame(watch);
+      };
+      // The old completion flag is cleared by reveal before sampling starts.
+      window.watchReel = watch;
+    });
+    await page
+      .getByRole("button", {
+        name: new RegExp(index === 0 ? "Sync paper one" : "Sync paper two"),
+      })
+      .click();
+    await page.evaluate(() => requestAnimationFrame(window.watchReel));
+    await expect(page.locator("#score")).toHaveAttribute(
+      "aria-label",
+      `Score ${value}`,
+      { timeout: 6000 },
+    );
+    const timing = await page.evaluate(() => ({
+      events: window.revealTiming,
+      lastChange: window.lastReelChange,
+    }));
+    const stop = timing.events.find((e) => e.kind === "stop"),
+      blast = timing.events.find((e) => e.kind === "blast"),
+      pop = timing.events.find((e) => e.kind === "pop");
+    expect(Math.abs(blast.at - stop.at)).toBeLessThan(40);
+    expect(Math.abs(pop.at - blast.at)).toBeLessThan(20);
+    expect(stop.at - timing.lastChange).toBeLessThan(100);
+    expect(blast.options.delay).toBe(0);
+    expect(blast.frames[0].opacity).toBeGreaterThan(0);
+    expect(pop.frames[1].transform).toContain(index === 0 ? "1.22" : "1.28");
+    await expect(page.locator(".score-glass").first()).toBeVisible();
+    if (index === 0)
+      await page.getByRole("button", { name: "Next paper" }).click();
+  }
+});
