@@ -25,7 +25,7 @@ export async function mountMarksWorkbook(
     }
     loading = true;
     try {
-      const students = data.students
+      let students = data.students
         .filter(
           (s) =>
             s.active &&
@@ -35,9 +35,22 @@ export async function mountMarksWorkbook(
         .sort(
           (a, b) => a.name.localeCompare(b.name) || a._id.localeCompare(b._id),
         );
-      const papers = data.papers.filter(
+      let papers = data.papers.filter(
         (p) => !next || !p.classId || p.classId === next,
       );
+      const oversized =
+        Math.max(2, students.length + 1) * Math.max(2, papers.length + 1) >
+          10000 ||
+        students.length > 499 ||
+        papers.length > 99;
+      if (oversized && controller)
+        throw Error(
+          "This class exceeds the worksheet limit. Select a smaller class (up to 499 students, 99 papers and 10,000 cells).",
+        );
+      if (oversized) {
+        students = [];
+        papers = [];
+      }
       const cells = { A1: "Name" };
       papers.forEach((p, c) => (cells[columnName(c + 1) + "1"] = p.name));
       students.forEach((s, r) => {
@@ -60,14 +73,6 @@ export async function mountMarksWorkbook(
         cells,
         revision: 0,
       };
-      if (
-        state.rows * state.columns > 10000 ||
-        state.rows > 500 ||
-        state.columns > 100
-      )
-        throw Error(
-          "This class exceeds the worksheet limit. Use a smaller class (up to 499 students, 99 papers and 10,000 cells).",
-        );
       const editable = (r, c) =>
         r > 0 &&
         c > 0 &&
@@ -78,17 +83,21 @@ export async function mountMarksWorkbook(
       controller = await mountWorkbook(host, data, {
         state,
         editable,
-        caption: `${next === "unassigned" ? "Students without a class" : data.classes.find((cls) => cls._id === next)?.name || "All students"} · ${students.length} ${students.length === 1 ? "student" : "students"} · ${papers.length} ${papers.length === 1 ? "paper" : "papers"}`,
+        caption: oversized
+          ? "Choose a class to load marks"
+          : `${next === "unassigned" ? "Students without a class" : data.classes.find((cls) => cls._id === next)?.name || "All students"} · ${students.length} ${students.length === 1 ? "student" : "students"} · ${papers.length} ${papers.length === 1 ? "paper" : "papers"}`,
         addStudent: () => addStudent?.(next === "unassigned" ? "" : next),
         addPaper: () => addPaper?.(next === "unassigned" ? "" : next),
         classes: data.classes,
         classId: next,
         onClassChange: load,
-        emptyMessage: !students.length
-          ? "No active students in this class. Add a student row to get started."
-          : !papers.length
-            ? "No papers yet. Add a paper column to begin entering marks."
-            : "",
+        emptyMessage: oversized
+          ? "This roster is too large to display at once. Use the Name header dropdown to select a smaller class."
+          : !students.length
+            ? "No active students in this class. Add a student row to get started."
+            : !papers.length
+              ? "No papers yet. Add a paper column to begin entering marks."
+              : "",
         save: async (workbook) => {
           const calculate = calculator(
               workbook.cells,

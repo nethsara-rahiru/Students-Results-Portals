@@ -827,3 +827,39 @@ test("Name header class dropdown autofills roster, paper headers and actual mark
     ),
   ).toBeTruthy();
 });
+
+test("Name class picker stays usable when the all-students roster exceeds worksheet limits", async ({
+  page,
+}) => {
+  const classId = "123456789012345678901234";
+  await page.route("**/api/admin/data", async (route) => {
+    const response = await route.fetch(),
+      data = await response.json();
+    data.classes = [{ _id: classId, name: "Small class" }];
+    data.students = Array.from({ length: 501 }, (_, i) => ({
+      _id: (i + 1).toString(16).padStart(24, "0"),
+      name: "Roster student " + String(i).padStart(3, "0"),
+      active: true,
+      classId: i === 0 ? classId : null,
+    }));
+    data.marks = [];
+    await route.fulfill({ response, json: data });
+  });
+  await signIn(page);
+  await expect(
+    page.getByText(
+      "This roster is too large to display at once. Use the Name header dropdown to select a smaller class.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await page.getByLabel("Choose class", { exact: true }).click();
+  await page
+    .getByRole("combobox", { name: "Select class", exact: true })
+    .selectOption(classId);
+  await expect(
+    page.getByRole("textbox", { name: "A2", exact: true }),
+  ).toHaveValue("Roster student 000");
+  await expect(
+    page.getByRole("textbox", { name: "A3", exact: true }),
+  ).toHaveCount(0);
+});
