@@ -509,3 +509,76 @@ test("workbook is private, validated, persistent and protected against stale wri
     revision,
   );
 });
+
+test("marks retain formula metadata and still reject invalid numeric marks", async () => {
+  const agent = request.agent(app);
+  let token = (await agent.get("/api/session")).body.csrf;
+  const login = await write(
+    agent,
+    "/api/login",
+    { username: "teacher", password: "correct-password" },
+    "post",
+    token,
+  );
+  token = login.body.csrf;
+  const student = (
+    await write(
+      agent,
+      "/api/admin/students",
+      { name: "Formula Student", label: "Formula test" },
+      "post",
+      token,
+    )
+  ).body.id;
+  const paper = (
+    await write(
+      agent,
+      "/api/admin/papers",
+      { name: "Formula Paper", max: 50 },
+      "post",
+      token,
+    )
+  ).body.id;
+  const entry = {
+    studentId: student,
+    paperId: paper,
+    value: 25,
+    formula: "=SUM(20,5)",
+    formulaBindings: [],
+  };
+  assert.equal(
+    (await write(agent, "/api/admin/marks", { entries: [entry] }, "put", token))
+      .status,
+    200,
+  );
+  const data = (await agent.get("/api/admin/data")).body;
+  assert.equal(
+    data.marks.find((m) => m.studentId === student && m.paperId === paper)
+      .formula,
+    "=SUM(20,5)",
+  );
+  assert.equal(
+    (
+      await write(
+        agent,
+        "/api/admin/marks",
+        { entries: [{ ...entry, value: 99 }] },
+        "put",
+        token,
+      )
+    ).status,
+    400,
+  );
+  assert.equal(
+    (
+      await write(
+        agent,
+        "/api/admin/marks",
+        { entries: [{ ...entry, formula: "not a formula" }] },
+        "put",
+        token,
+      )
+    ).status,
+    400,
+  );
+});

@@ -82,3 +82,28 @@ test("extreme references and deeply nested formulas terminate safely", () => {
   assert.equal(calc("A2"), "#LIMIT!");
   assert.equal(calc("A3"), "#REF!");
 });
+
+test("worksheet formula references follow stable student and paper IDs", async () => {
+  const { bindingsFor, rebaseFormula } =
+    await import("../public/worksheet-references.js");
+  const students = [{ _id: "student-a" }, { _id: "student-b" }],
+    papers = [{ _id: "paper-a" }, { _id: "paper-b" }];
+  const formula = '=SUM(B2,$C$3)+IF(B2=1,"B2",0)';
+  const formulaBindings = bindingsFor(formula, students, papers);
+  assert.equal(
+    rebaseFormula(
+      { formula, formulaBindings },
+      [students[1], students[0]],
+      [papers[1], papers[0]],
+    ),
+    '=SUM(C3,$B$2)+IF(C3=1,"B2",0)',
+  );
+  assert.match(
+    rebaseFormula({ formula, formulaBindings }, [students[0]], papers),
+    /#REF!/,
+  );
+  assert.throws(
+    () => bindingsFor("=Z99", students, papers),
+    /outside this class/,
+  );
+});

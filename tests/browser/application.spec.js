@@ -98,21 +98,28 @@ test("mobile layout and keyboard profile selection", async ({ page }) => {
     fullPage: true,
   });
 });
-test("teacher spreadsheet: navigation, paste, validation, fill, undo, search and management", async ({
+test("teacher worksheet: named headers, mark entry, paste, fill, undo, validation and management", async ({
   page,
 }) => {
-  await page.goto("/admin");
-  await page.getByLabel("Username", { exact: true }).fill("teacher");
-  await page.getByLabel("Password", { exact: true }).fill("browser-password");
-  await page.getByRole("button", { name: "Sign in" }).click();
-  const cells = page.locator("td input");
-  await expect(cells).toHaveCount(6);
-  await cells.nth(0).fill("35");
-  await page.keyboard.press("Tab");
-  await expect(cells.nth(1)).toBeFocused();
-  await expect(page.locator("#save-status")).toHaveText("All changes saved");
-  await cells.nth(0).focus();
-  await cells.nth(0).evaluate((el) => {
+  await signIn(page);
+  await expect(
+    page.getByRole("button", { name: "Student marks", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("textbox", { name: "Name header", exact: true }),
+  ).toHaveValue("Name");
+  const cell = (address) =>
+    page.getByRole("textbox", { name: address, exact: true });
+  const saved = () =>
+    expect(page.locator(".workbook-status")).toHaveText("All changes saved");
+  await expect(cell("B1")).toHaveValue("Mathematics · Paper 01");
+  await expect(cell("A2")).toHaveValue(/Daniel Perera/);
+  await expect(cell("A2")).toHaveAttribute("readonly", "");
+  await cell("B2").fill("35");
+  await cell("B2").press("Tab");
+  await saved();
+  await cell("B2").click();
+  await cell("B2").evaluate((el) => {
     const data = new DataTransfer();
     data.setData("text/plain", "20\t30\n40\t45");
     el.dispatchEvent(
@@ -123,43 +130,42 @@ test("teacher spreadsheet: navigation, paste, validation, fill, undo, search and
       }),
     );
   });
-  await expect(cells.nth(2)).toHaveValue("40");
+  await saved();
+  await expect(cell("B3")).toHaveValue("40");
   await page.getByRole("button", { name: "Undo", exact: true }).click();
-  await expect(cells.nth(2)).toHaveValue("64");
+  await saved();
+  await expect(cell("B3")).toHaveValue("64");
   await page.getByRole("button", { name: "Redo", exact: true }).click();
-  await expect(cells.nth(2)).toHaveValue("40");
-  await cells.nth(0).focus();
-  await page.keyboard.press("Shift+ArrowDown");
-  await page.getByRole("button", { name: "Fill down" }).click();
-  await expect(cells.nth(2)).toHaveValue("20");
-  await cells.nth(1).fill("999");
-  await page.keyboard.press("Tab");
-  await expect(page.locator("#save-status")).toContainText("maximum");
-  await expect(cells.nth(1)).toHaveValue("30");
-  await cells.nth(1).fill("31");
-  await page.keyboard.press("Tab");
-  await expect(page.locator("#save-status")).toHaveText("All changes saved");
+  await saved();
+  await expect(cell("B3")).toHaveValue("40");
+  await cell("B2").click();
+  await cell("B2").press("Shift+ArrowDown");
+  await page.getByRole("button", { name: "Fill down", exact: true }).click();
+  await saved();
+  await expect(cell("B3")).toHaveValue("20");
+  await cell("C2").fill("999");
+  await cell("C2").press("Tab");
+  await expect(page.locator(".workbook-status")).toContainText("0–50");
+  await cell("C2").fill("31");
+  await cell("C2").press("Tab");
+  await saved();
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.locator("h1").click();
   await page.evaluate(() => scrollTo(0, 0));
   await page.screenshot({ path: "docs/screenshots/admin.png", fullPage: true });
-  await page.getByLabel("Find student").fill("Maya");
-  await expect(cells).toHaveCount(2);
-  await page.getByRole("link", { name: "Students", exact: true }).click();
-  await page.getByRole("button", { name: "Add student" }).click();
+  await page
+    .getByRole("button", { name: "Add student row", exact: true })
+    .click();
   await page.getByLabel("Full name", { exact: true }).fill("New Student");
   await page.getByLabel("Profile label").fill("Group C");
-  await page.getByRole("button", { name: "Save changes" }).click();
-  await page.getByRole("link", { name: "Students", exact: true }).click();
-  await expect(page.getByText("New Student", { exact: true })).toBeVisible();
-  await page.getByRole("link", { name: "Papers", exact: true }).click();
-  await page.getByRole("button", { name: "Create paper" }).click();
-  await page.getByLabel("Paper name").fill("Draft Paper 03");
-  await page.getByRole("button", { name: "Save changes" }).click();
-  await expect(page).toHaveURL(/\/admin\/papers$/);
-  await expect(page.getByText("Draft Paper 03", { exact: true })).toBeVisible();
-  await page.getByRole("link", { name: "Marks", exact: true }).click();
-  await expect(page.locator("thead")).toContainText("Draft Paper 03");
+  await page.getByRole("button", { name: "Save changes", exact: true }).click();
+  await expect(cell("A4")).toHaveValue(/New Student/);
+  await page
+    .getByRole("button", { name: "Add paper column", exact: true })
+    .click();
+  await page.getByLabel("Paper name", { exact: true }).fill("Draft Paper 03");
+  await page.getByRole("button", { name: "Save changes", exact: true }).click();
+  await expect(cell("D1")).toHaveValue("Draft Paper 03");
 });
 test("teacher mobile workspace remains within viewport", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
@@ -236,12 +242,14 @@ test("leaving the marks page waits for an in-flight save and persists the edit",
     await new Promise((resolve) => setTimeout(resolve, 250));
     await route.continue();
   });
-  const cell = page.locator("td input").first();
+  const cell = page.getByRole("textbox", { name: "B2", exact: true });
   await cell.fill("27");
   await page.getByRole("link", { name: "Students", exact: true }).click();
   await expect(page).toHaveURL(/\/admin\/students$/);
   await page.getByRole("link", { name: "Marks", exact: true }).click();
-  await expect(page.locator("td input").first()).toHaveValue("27");
+  await expect(
+    page.getByRole("textbox", { name: "B2", exact: true }),
+  ).toHaveValue("27");
 });
 test("ambient background follows the new palette and respects reduced motion", async ({
   page,
@@ -272,22 +280,36 @@ test("a failed marks save keeps the teacher on the page until they retry", async
       body: JSON.stringify({ error: "Temporary save failure" }),
     });
   });
-  const cell = page.locator("td input").first();
+  const cell = page.getByRole("textbox", { name: "B2", exact: true });
   await cell.fill("29");
   await page.getByRole("link", { name: "Students", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText(
     "Please retry before leaving",
   );
   await expect(page).toHaveURL(/\/admin\/marks$/);
-  await expect(page.locator("#save-status")).toHaveText(
+  await expect(page.locator(".workbook-status")).toContainText(
     "Temporary save failure",
   );
+  await page.getByLabel("Choose class", { exact: true }).click();
+  await page
+    .getByRole("combobox", { name: "Select class", exact: true })
+    .selectOption("unassigned");
+  await expect(
+    page.getByRole("combobox", { name: "Select class", exact: true }),
+  ).toHaveValue("");
+  await page.getByLabel("Choose class", { exact: true }).click();
+
   await page.unroute("**/api/admin/marks");
-  await cell.fill("29");
+  await page.getByRole("button", { name: "Retry save", exact: true }).click();
+  await expect(page.locator(".workbook-status")).toHaveText(
+    "All changes saved",
+  );
   await page.getByRole("link", { name: "Students", exact: true }).click();
   await expect(page).toHaveURL(/\/admin\/students$/);
   await page.getByRole("link", { name: "Marks", exact: true }).click();
-  await expect(page.locator("td input").first()).toHaveValue("29");
+  await expect(
+    page.getByRole("textbox", { name: "B2", exact: true }),
+  ).toHaveValue("29");
 });
 test("one graphic and title transform continuously through both papers, summary and replay", async ({
   page,
@@ -624,133 +646,32 @@ test("admin performance and history remain searchable and class dialogs can be c
   await expect(page.getByRole("dialog")).toHaveCount(0);
 });
 
-test("Excel-style worksheet saves formulas, recalculates, inserts rows and columns, pastes and reloads", async ({
+test("one marks worksheet persists live formulas and protects names/headers", async ({
   page,
 }) => {
   await signIn(page);
-  await page
-    .getByRole("button", { name: "Flexible worksheet", exact: true })
-    .click();
-  const host = page.locator("#flexible-workspace");
-  const formula = page.getByRole("textbox", {
-    name: "Cell formula or value",
-    exact: true,
-  });
+  const cell = (address) =>
+    page.getByRole("textbox", { name: address, exact: true });
   const saved = () =>
-    expect(host.locator(".workbook-status")).toHaveText("All changes saved");
-  async function edit(address, value) {
-    await host.getByRole("textbox", { name: address, exact: true }).click();
-    await formula.fill(value);
-    await formula.press("Enter");
-    await saved();
-  }
-  await edit("A1", "20");
-  await edit("B1", "=SUM(A1,5)");
-  await expect(
-    host.getByRole("textbox", { name: "B1", exact: true }),
-  ).toHaveValue("25");
-  await edit("A1", "30");
-  await expect(
-    host.getByRole("textbox", { name: "B1", exact: true }),
-  ).toHaveValue("35");
-  await host.getByRole("textbox", { name: "A1", exact: true }).click();
-  await host
-    .getByRole("button", { name: "Insert row above", exact: true })
-    .click();
+    expect(page.locator(".workbook-status")).toHaveText("All changes saved");
+  await cell("B2").fill("20");
+  await cell("B2").press("Tab");
   await saved();
-  await expect(
-    host.getByRole("textbox", { name: "B2", exact: true }),
-  ).toHaveValue("35");
-  await host.getByRole("textbox", { name: "B2", exact: true }).click();
-  await expect(formula).toHaveValue("=SUM(A2,5)");
-  await host.getByRole("button", { name: "Add column", exact: true }).click();
+  await cell("C2").fill("=SUM(B2,5)");
+  await cell("C2").press("Tab");
   await saved();
-  await expect(host.locator("thead th")).toHaveCount(14);
-  await host.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(cell("C2")).toHaveValue("25");
+  await cell("B2").fill("30");
+  await cell("B2").press("Tab");
   await saved();
-  await expect(host.locator("thead th")).toHaveCount(13);
-  await host.getByRole("button", { name: "Redo", exact: true }).click();
-  await saved();
-  await expect(host.locator("thead th")).toHaveCount(14);
-  const a3 = host.getByRole("textbox", { name: "A3", exact: true });
-  await a3.click();
-  await a3.evaluate((el) => {
-    const data = new DataTransfer();
-    data.setData("text/plain", "10\t20\n30\t40");
-    el.dispatchEvent(
-      new ClipboardEvent("paste", {
-        clipboardData: data,
-        bubbles: true,
-        cancelable: true,
-      }),
-    );
-  });
-  await saved();
-  await edit("C3", "=AVERAGE(A3:B4)");
-  await expect(
-    host.getByRole("textbox", { name: "C3", exact: true }),
-  ).toHaveValue("25");
-  await host.getByRole("textbox", { name: "B2", exact: true }).click();
-  const clipboard = await host
-    .getByRole("textbox", { name: "B2", exact: true })
-    .evaluate((el) => {
-      const data = new DataTransfer();
-      el.dispatchEvent(
-        new ClipboardEvent("copy", {
-          clipboardData: data,
-          bubbles: true,
-          cancelable: true,
-        }),
-      );
-      return Object.fromEntries(
-        [...data.types].map((type) => [type, data.getData(type)]),
-      );
-    });
-  await host.getByRole("textbox", { name: "B5", exact: true }).click();
-  await host
-    .getByRole("textbox", { name: "B5", exact: true })
-    .evaluate((el, clipboard) => {
-      const data = new DataTransfer();
-      for (const [type, value] of Object.entries(clipboard))
-        data.setData(type, value);
-      el.dispatchEvent(
-        new ClipboardEvent("paste", {
-          clipboardData: data,
-          bubbles: true,
-          cancelable: true,
-        }),
-      );
-    }, clipboard);
-  await saved();
-  await expect(
-    host.getByRole("textbox", { name: "B5", exact: true }),
-  ).toHaveValue("5");
-  await host.getByRole("textbox", { name: "B5", exact: true }).click();
-  await expect(formula).toHaveValue("=SUM(A5,5)");
-  await host
-    .getByRole("textbox", { name: "B5", exact: true })
-    .press("Shift+ArrowDown");
-  await host.getByRole("button", { name: "Fill down", exact: true }).click();
-  await saved();
-  await expect(
-    host.getByRole("textbox", { name: "B6", exact: true }),
-  ).toHaveValue("5");
-  await host.getByRole("textbox", { name: "A1", exact: true }).click();
-  page.once("dialog", (dialog) => dialog.accept());
-  await host.getByRole("button", { name: "Delete row", exact: true }).click();
-  await saved();
-  await expect(
-    host.getByRole("textbox", { name: "B1", exact: true }),
-  ).toHaveValue("35");
-  await host.getByRole("button", { name: "Undo", exact: true }).click();
-  await saved();
+  await expect(cell("C2")).toHaveValue("35");
   await page.reload();
-  await page
-    .getByRole("button", { name: "Flexible worksheet", exact: true })
-    .click();
+  await expect(cell("C2")).toHaveValue("35");
+  await cell("C2").click();
   await expect(
-    host.getByRole("textbox", { name: "C3", exact: true }),
-  ).toHaveValue("25");
+    page.getByRole("textbox", { name: "Cell formula or value", exact: true }),
+  ).toHaveValue("=SUM(B2,5)");
+  await expect(cell("B1")).toHaveAttribute("readonly", "");
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.screenshot({
     path: "docs/screenshots/worksheet.png",
@@ -762,53 +683,183 @@ test("Excel-style worksheet saves formulas, recalculates, inserts rows and colum
       () => document.documentElement.scrollWidth <= innerWidth,
     ),
   ).toBeTruthy();
-  await page
-    .getByRole("button", { name: "Student marks", exact: true })
-    .click();
-  const first = page.locator("#marks-workspace td input").first();
-  await first.fill("=SUM(10,15)");
-  await first.press("Tab");
-  await expect(page.locator("#save-status")).toHaveText("All changes saved");
-  await expect(first).toHaveValue("25");
 });
 
-test("worksheet failed saves block navigation and retry without losing edits", async ({
+test("Name header class dropdown autofills roster, paper headers and actual marks by stable IDs", async ({
   page,
 }) => {
   await signIn(page);
-  await page
-    .getByRole("button", { name: "Flexible worksheet", exact: true })
-    .click();
-  await page.route("**/api/admin/workbook", (route) =>
-    route.request().method() === "PUT"
-      ? route.fulfill({
-          status: 503,
-          contentType: "application/json",
-          body: JSON.stringify({ error: "Temporary workbook save failure" }),
-        })
-      : route.continue(),
-  );
-  const host = page.locator("#flexible-workspace");
-  await host.getByRole("textbox", { name: "D10", exact: true }).click();
-  const formula = page.getByRole("textbox", {
-    name: "Cell formula or value",
-    exact: true,
-  });
-  await formula.fill("=SUM(10,20)");
-  await formula.press("Enter");
-  await expect(host.locator(".workbook-status")).toContainText(
-    "Temporary workbook save failure",
-  );
-  await page.getByRole("link", { name: "Students", exact: true }).click();
-  await expect(page).toHaveURL(/\/admin\/marks$/);
   await expect(
-    host.getByRole("textbox", { name: "D10", exact: true }),
-  ).toHaveValue("30");
-  await page.unroute("**/api/admin/workbook");
-  await host.getByRole("button", { name: "Retry save", exact: true }).click();
-  await expect(host.locator(".workbook-status")).toHaveText(
+    page.getByRole("textbox", { name: "Name header", exact: true }),
+  ).toBeVisible();
+  const call = (url, body, method) =>
+    page.evaluate(
+      async ({ url, body, method }) =>
+        (await import("/client.js")).api(url, body, method),
+      { url, body, method },
+    );
+  const a = await call("/admin/classes", { name: "Worksheet Class A" }),
+    b = await call("/admin/classes", { name: "Worksheet Class B" });
+  const one = await call("/admin/students", {
+      name: "Same Name",
+      label: "Class A · 01",
+      classId: a.id,
+    }),
+    two = await call("/admin/students", {
+      name: "Same Name",
+      label: "Class B · 02",
+      classId: b.id,
+    });
+  const paper = await call("/admin/papers", {
+    name: "Class A Paper",
+    max: 100,
+    classId: a.id,
+    state: "draft",
+  });
+  await call(
+    "/admin/marks",
+    { entries: [{ studentId: one.id, paperId: paper.id, value: 0 }] },
+    "PUT",
+  );
+  await page.reload();
+  await page.getByLabel("Choose class", { exact: true }).click();
+  await page
+    .getByRole("combobox", { name: "Select class", exact: true })
+    .selectOption(a.id);
+  const cell = (address) =>
+    page.getByRole("textbox", { name: address, exact: true });
+  await expect(cell("A2")).toHaveValue("Same Name · Class A · 01");
+  await expect(cell("A3")).toHaveCount(0);
+  const headers = await page
+    .locator("tbody tr:first-child td input")
+    .evaluateAll((inputs) => inputs.map((i) => i.value));
+  const col = headers.indexOf("Class A Paper");
+  expect(col).toBeGreaterThan(0);
+  const mark = page.locator("tbody tr").nth(1).locator("td input").nth(col);
+  await expect(mark).toHaveValue("0");
+  await mark.fill("73");
+  await mark.press("Tab");
+  await expect(page.locator(".workbook-status")).toHaveText(
     "All changes saved",
   );
-  await page.getByRole("link", { name: "Students", exact: true }).click();
-  await expect(page).toHaveURL(/\/admin\/students$/);
+  const data = await call("/admin/data");
+  expect(
+    data.marks.find((m) => m.studentId === one.id && m.paperId === paper.id)
+      .value,
+  ).toBe(73);
+  expect(
+    data.marks.find((m) => m.studentId === two.id && m.paperId === paper.id),
+  ).toBeUndefined();
+  await page.getByLabel("Choose class", { exact: true }).click();
+  await page
+    .getByRole("combobox", { name: "Select class", exact: true })
+    .selectOption(b.id);
+  await expect(cell("A2")).toHaveValue("Same Name · Class B · 02");
+  expect(
+    await page
+      .locator("tbody tr:first-child td input")
+      .evaluateAll((inputs) => inputs.map((i) => i.value)),
+  ).not.toContain("Class A Paper");
+  await page.reload();
+  await expect(cell("A2")).toHaveValue("Same Name · Class B · 02");
+  await page.getByLabel("Choose class", { exact: true }).click();
+  await page
+    .getByRole("combobox", { name: "Select class", exact: true })
+    .selectOption(a.id);
+  await expect(
+    page.locator("tbody tr").nth(1).locator("td input").nth(col),
+  ).toHaveValue("73");
+  await page
+    .getByRole("button", { name: "Add student row", exact: true })
+    .click();
+  await expect(
+    page
+      .getByRole("dialog")
+      .getByRole("combobox", { name: "Class", exact: true }),
+  ).toHaveValue(a.id);
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Add paper column", exact: true })
+    .click();
+  await expect(
+    page
+      .getByRole("dialog")
+      .getByRole("combobox", { name: "Class", exact: true }),
+  ).toHaveValue(a.id);
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  const empty = await call("/admin/classes", { name: "Worksheet Empty Class" });
+  await page.reload();
+  await page.getByLabel("Choose class", { exact: true }).click();
+  await page
+    .getByRole("combobox", { name: "Select class", exact: true })
+    .selectOption(empty.id);
+  await expect(
+    page.getByText(
+      "No active students in this class. Add a student row to get started.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await expect(cell("A2")).toHaveValue("");
+  await page.getByLabel("Choose class", { exact: true }).click();
+  await page
+    .getByRole("combobox", { name: "Select class", exact: true })
+    .selectOption(a.id);
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.screenshot({
+    path: "docs/screenshots/class-worksheet.png",
+    fullPage: true,
+  });
+  await page.getByLabel("Choose class", { exact: true }).click();
+  await page.screenshot({
+    path: "docs/screenshots/class-picker.png",
+    fullPage: true,
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page
+    .getByRole("combobox", { name: "Select class", exact: true })
+    .scrollIntoViewIfNeeded();
+  const picker = await page.locator(".class-picker-panel").boundingBox();
+  expect(picker.x).toBeGreaterThanOrEqual(0);
+  expect(picker.x + picker.width).toBeLessThanOrEqual(390);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBeTruthy();
+});
+
+test("Name class picker stays usable when the all-students roster exceeds worksheet limits", async ({
+  page,
+}) => {
+  const classId = "123456789012345678901234";
+  await page.route("**/api/admin/data", async (route) => {
+    const response = await route.fetch(),
+      data = await response.json();
+    data.classes = [{ _id: classId, name: "Small class" }];
+    data.students = Array.from({ length: 501 }, (_, i) => ({
+      _id: (i + 1).toString(16).padStart(24, "0"),
+      name: "Roster student " + String(i).padStart(3, "0"),
+      active: true,
+      classId: i === 0 ? classId : null,
+    }));
+    data.marks = [];
+    await route.fulfill({ response, json: data });
+  });
+  await signIn(page);
+  await expect(
+    page.getByText(
+      "This roster is too large to display at once. Use the Name header dropdown to select a smaller class.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await page.getByLabel("Choose class", { exact: true }).click();
+  await page
+    .getByRole("combobox", { name: "Select class", exact: true })
+    .selectOption(classId);
+  await expect(
+    page.getByRole("textbox", { name: "A2", exact: true }),
+  ).toHaveValue("Roster student 000");
+  await expect(
+    page.getByRole("textbox", { name: "A3", exact: true }),
+  ).toHaveCount(0);
 });

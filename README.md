@@ -74,7 +74,7 @@ The theme uses **#159ED4 → #9D59EB**, with subtle drifting background gradient
 2. Create a paper with subject, grade, date, maximum and optional class. A draft column appears immediately in **Marks**. Use **Papers → Move left** to reorder spreadsheet columns and the student reveal together.
 3. Enter marks in the spreadsheet. Changes save when leaving a cell. The status line reports saving, success or validation failures. Use **A** for absent, blank for no entered result, and **0** for an actual zero. Up to two decimal places are supported.
 4. Click a cell; use Shift-click or Shift+arrows for ranges. Arrow keys, Tab and Enter navigate. Copy/paste TSV from Excel, use **Fill down** / Ctrl or ⌘+D, Delete to clear, and Undo/Redo / Ctrl or ⌘+Z. Undo history lasts until the grid is rebuilt by search, sorting, filtering or navigation. Batch pastes are limited to 2,000 cells and rejected before writing if any cell is invalid. Saving temporarily makes cells read-only.
-5. Selection calculations show **SUM, AVERAGE, MAX, MIN, COUNT** for numeric cells. They are computed locally; formulas are never evaluated or stored as marks. No full Excel formula language or workbook import/export is claimed.
+5. The worksheet shows selection calculations and supports formulas. Validated numeric results are stored as marks, with formula metadata kept separately on each mark record. Publication remains an explicit teacher action.
 6. Verify marks, then explicitly choose **published** in the paper editor. **draft** and **unpublished** papers are hidden from student APIs. Editing an already published mark changes its visible value immediately; unpublish first if reviewing changes privately.
 7. **Performance** shows normalized averages; **History** shows the latest 200 audit events with prior/new marks. Audit events remain in MongoDB beyond this display limit.
 
@@ -142,7 +142,7 @@ Regularly test `mongorestore` to an **isolated** database/server and verify stud
 ## Known limitations
 
 - Name mode deliberately does not provide confidentiality; optional code mode is shared-secret access, without student account recovery or MFA.
-- Spreadsheet calculations are selection summaries, not stored formulas. Very large rosters are not virtualized. Similar-name search ranks at most 2,000 candidates, and exact-name lookup presents at most 30 profiles; larger ambiguous rosters require teacher labels or data cleanup.
+- The worksheet supports a documented subset of Excel formulas; IF arguments evaluate eagerly. Missing student/paper references show #REF! and must be corrected before saving. Formulas recalculate on edits in the open worksheet, not as a background database job. Very large rosters are not virtualized. Similar-name search ranks at most 2,000 candidates, and exact-name lookup presents at most 30 profiles; larger ambiguous rosters require teacher labels or data cleanup.
 - Validated mark batches and audit inserts are separate MongoDB writes, without a cross-document transaction. A database outage midway can leave a partially persisted batch or a missing audit event. Avoid simultaneous teachers editing the same cells: concurrent writes use last-write-wins and have no conflict UI. Backups and the save/error indicator remain necessary.
 - Existing collection schemas are not replaced automatically. Migrated MVP data should be reviewed before publication. Previously existing collection validators may require manual migration.
 - Undo is local to the current grid, not a global database rollback. No offline editing, CSV/workbook file import, email delivery, or automatic backup scheduler.
@@ -154,7 +154,7 @@ Regularly test `mongorestore` to an **isolated** database/server and verify stud
 - `public/app.js`: student bootstrap; `public/journey.js`: persistent scene/state transitions; `public/journey-accent.js`: non-circular line/paper-frame motion; `public/journey.css`: student layouts and motion.
 - `public/admin.js`: teacher pages; `public/client.js`: shared API/session and UI helpers.
 - `views/admin/`: separate protected admin HTML documents.
-- `public/sheet.js`: spreadsheet interactions; `public/reveal.js`: animation and evidence-based messages; `public/style.css`: responsive theme and ambient background.
+- `public/workbook.js`, `public/marks-workbook.js`, `public/formulas.js`, `public/worksheet-references.js`: unified marks worksheet, formulas and stable identity references; `public/reveal.js`: animation and evidence-based messages; `public/style.css`: responsive theme and ambient background.
 - `scripts/admin.js`: local administrator provisioning/reset.
 - `tests/`: isolated integration and browser tests; `deploy/`: VPS examples; `docs/`: architecture, verification and screenshots.
 
@@ -164,16 +164,21 @@ Open `/admin` to sign in. Each section has its own URL and supports refresh and 
 
 Admin UI previews: [marks workspace](docs/screenshots/admin.png), [paper management](docs/screenshots/admin-papers.png), and [mobile directory](docs/screenshots/admin-mobile.png).
 
-### Excel-style worksheet
+### Class marks worksheet
 
-In **Admin → Marks**, use **Add student row** to create a student and **Create paper** to add a paper column. The student-marks grid labels columns A, B, C… and student rows from 2 (row 1 is the header). You can enter formulas such as `=SUM(B2:C2)` or `=ROUND(B2/2,2)`; only the calculated, validated numeric result is saved as a mark. Those formulas are snapshots, so use **Flexible worksheet** for calculations that must update when referenced cells change.
+**Admin → Marks** opens one flexible worksheet directly. There is no separate Student marks section.
 
-The flexible worksheet is a shared, admin-only workspace stored in MongoDB's `workbooks` collection. It supports arbitrary text/numbers/formulas, adding/inserting/deleting rows and columns, a formula bar, range selection, bulk TSV paste, undo/redo, fill down, and copy/paste. Within this worksheet, copying preserves formulas and adjusts relative references; copying to student marks or another application provides calculated values. `$A$1`, `$A1`, and `A$1` anchors work with fill/copy. Structural edits update references; undo can restore deleted data.
+- **Row 1** contains headers: **Name** in A1, followed by paper names in spreadsheet/reveal order.
+- **Column A** contains student names and profile labels. Click the **dropdown arrow beside Name**, then choose a class. Its active students, applicable paper columns and saved marks fill automatically. All students and Students without a class are also available. The selected class is remembered for the current browser session. If the full roster exceeds the worksheet limit, the Name dropdown stays available so you can choose a smaller class.
+- Names and headers are protected so cell edits cannot overwrite identities. **Add student row** creates a real student; **Add paper column** creates a draft paper. Both default to the selected class. Edit/deactivate profiles in Students and manage paper metadata/publication in Papers.
+- Mark cells support numbers, **A** for absent, blank for no result, formulas, multi-cell selection, TSV copy/paste, fill down, undo/redo, a formula bar and autosaving. A zero remains a real result. Marks must stay within each paper's maximum with at most two decimal places.
+- Supported functions: `SUM`, `AVERAGE`, `MIN`, `MAX`, `COUNT`, `COUNTA`, `ROUND`, `ABS`, `IF`, `AND`, `OR`, `NOT`; arithmetic, comparisons, percentages, quoted strings, references and ranges are supported. Example: `=ROUND(SUM(B2:C2)/2,2)`. Avoid referencing the formula's own cell. Expressions never execute JavaScript or access external services.
+- Formulas and their stable student/paper reference bindings persist with mark records. Reordering/filtering rows rebases references by IDs, including duplicate names. References to students/papers outside the selected class show `#REF!`; select the wider roster or correct the formula. Save failures retain edits and block class changes and ordinary navigation until corrected/retried. Close/reload can still lose unsaved edits.
 
-Supported functions: `SUM`, `AVERAGE`, `MIN`, `MAX`, `COUNT`, `COUNTA`, `ROUND`, `ABS`, `IF`, `AND`, `OR`, `NOT`; also arithmetic, comparisons, percentages, quoted strings, A1 cell references and rectangular ranges. Formula errors and circular references are shown in cells. Expressions are interpreted without JavaScript evaluation or external access. This is a practical Excel-style subset, with eager IF argument evaluation; macros, full Excel formula compatibility, formatting tools, and XLSX import/export are not implemented.
+The worksheet writes actual validated marks through the protected marks API; it does not publish papers automatically. Numeric mark values remain separate from formula metadata. Only published results are returned to students, without formulas or other students' records.
 
-**Load marks snapshot** copies current data into the worksheet after confirmation. Worksheet calculations do not create papers, publish results, or change actual marks automatically. To use a calculated result, copy its value into the student-marks grid; the existing maximum, precision, class and publication rules still apply.
+Limits: 499 students, 99 papers and 10,000 total visible cells per class; 2,000 changed/recalculated marks per save; 1,000 characters per formula; 200 distinct formula references; existing 512 KB API request limit. Undo is local to the loaded class and resets on class change/reload. Marks retain the existing last-write-wins behavior for concurrent teachers. This is an Excel-style subset, without macros, full Excel compatibility, formatting tools, XLSX import/export or background recalculation. IF evaluates its arguments eagerly.
 
-Limits: one shared worksheet, 500 rows, 100 columns, 10,000 total cells, 1,000 characters per cell, 2,000 pasted cells per operation, and the API's 512 KB request limit. Saves use revision checks: a stale session receives a conflict instead of overwriting newer work. Failed saves retain edits in the open page and block ordinary navigation; use **Retry save**. For a conflict, copy your unsaved values before reloading and reapplying them. Closing the browser can still lose unsaved edits. Include `workbooks` in database backups.
+Previous standalone calculation workbooks remain in MongoDB's `workbooks` collection and are not overwritten or imported into actual marks. Keep that collection in backups; the removed standalone workbook UI is not required for the new marks workflow.
 
-[Worksheet preview](docs/screenshots/worksheet.png).
+[Class worksheet preview](docs/screenshots/class-worksheet.png) · [Name header dropdown](docs/screenshots/class-picker.png).

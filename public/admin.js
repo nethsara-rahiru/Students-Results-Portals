@@ -1,5 +1,4 @@
-import { mountWorkbook } from "./workbook.js";
-import { mountSheet } from "./sheet.js";
+import { mountMarksWorkbook } from "./marks-workbook.js";
 import { api, app, esc, btn, shell, notify } from "./client.js";
 let sessionInfo, sheet;
 const descriptions = {
@@ -163,9 +162,9 @@ async function admin() {
         );
     });
   });
-  function studentForm(s) {
+  function studentForm(s, create = false) {
     dialog(
-      s ? "Edit student" : "Add student",
+      s && !create ? "Edit student" : "Add student",
       field(
         "Full name",
         "name",
@@ -188,113 +187,36 @@ async function admin() {
         ),
       (f) =>
         api(
-          "/admin/students" + (s ? "/" + s._id : ""),
+          "/admin/students" + (s && !create ? "/" + s._id : ""),
           { ...f, active: f.active === "true", classId: f.classId || null },
-          s ? "PATCH" : "POST",
+          s && !create ? "PATCH" : "POST",
         ),
     );
   }
-  function paperForm(p) {
+  function paperForm(p, create = false) {
     dialog(
-      p ? "Edit paper" : "Create paper",
+      p && !create ? "Edit paper" : "Create paper",
       field("Paper name", "name", p?.name || "", "text", "required") +
         `<div class="form-grid">${field("Subject", "subject", p?.subject || "")}${field("Grade", "grade", p?.grade || "")}${field("Paper date", "date", p?.date || "", "date")}${field("Maximum marks", "max", p?.max || 100, "number", 'min="1" max="10000" required')}</div><label>Class<select name="classId">${options(data.classes, p?.classId)}</select></label><label>Publication status<select name="state">${["draft", "published", "unpublished"].map((s) => `<option ${s === (p?.state || "draft") ? "selected" : ""}>${s}</option>`).join("")}</select></label><p class="privacy">Publishing makes entered marks accessible in the configured student access mode. Verify marks before publishing.</p>`,
       (f) =>
         api(
-          "/admin/papers" + (p ? "/" + p._id : ""),
+          "/admin/papers" + (p && !create ? "/" + p._id : ""),
           { ...f, max: Number(f.max), classId: f.classId || null },
-          p ? "PATCH" : "POST",
+          p && !create ? "PATCH" : "POST",
         ),
     );
   }
   async function render() {
     if (page === "marks") {
-      area.innerHTML = `<div class="top"><div><h2>Marks studio</h2><p class="muted">One clear view. Every paper, in reveal order.</p></div><div class="row"><button id="add-student-row" class="secondary">+ Add student row</button><button id="add-paper">+ Create paper</button></div></div><div class="sheet-tabs" role="group" aria-label="Spreadsheet workspace"><button id="marks-tab" class="secondary" aria-pressed="true">Student marks</button><button id="workbook-tab" class="secondary" aria-pressed="false">Flexible worksheet</button></div><div id="marks-workspace"><div class="toolbar"><label class="search">Find student<input id="search" type="search" placeholder="Search by name"></label><label>Class<select id="class-filter">${options(data.classes, null)}</select></label><label>Sort<select id="sort"><option value="asc">Name A–Z</option><option value="desc">Name Z–A</option></select></label><button id="undo" class="secondary">Undo</button><button id="redo" class="secondary">Redo</button><button id="fill" class="secondary">Fill down</button></div><details class="keyboard-guide"><summary>Keyboard shortcuts & entry guide</summary><p class="sheet-help">Shift + arrows selects a range · Tab / Enter navigates · Copy / paste from Excel · Ctrl/⌘ + D fills down · Delete clears · A = absent · Blank = no result · Formulas such as =SUM(B2:C2) save their calculated value; use the flexible worksheet for live formulas.</p></details><p id="save-status" role="status">All changes saved</p><div id="sheet" class="sheet" tabindex="0" aria-label="Scrollable marks editor"></div></div><div id="flexible-workspace" hidden></div>`;
-      document.querySelector("#add-paper").onclick = () => paperForm();
-      document.querySelector("#add-student-row").onclick = () => studentForm();
-      let marksController, workbookController;
-      async function switchSheet(workbook) {
-        document.activeElement?.blur();
-        if (
-          (sheet?.isBusy() || sheet?.hasUnsavedChanges()) &&
-          !(await sheet.whenIdle())
-        ) {
-          notify("Please retry saving before switching worksheets.");
-          return;
-        }
-        if (workbook && !workbookController) {
-          try {
-            workbookController = await mountWorkbook(
-              document.querySelector("#flexible-workspace"),
-              data,
-            );
-          } catch (error) {
-            notify(error.message);
-            return;
-          }
-        }
-        sheet = workbook ? workbookController : marksController;
-        document.querySelector("#marks-workspace").hidden = workbook;
-        document.querySelector("#flexible-workspace").hidden = !workbook;
-        document
-          .querySelector("#marks-tab")
-          .setAttribute("aria-pressed", String(!workbook));
-        document
-          .querySelector("#workbook-tab")
-          .setAttribute("aria-pressed", String(workbook));
-      }
-      document.querySelector("#marks-tab").onclick = () => switchSheet(false);
-      document.querySelector("#workbook-tab").onclick = () => switchSheet(true);
-      const draw = () => {
-        if (sheet?.isBusy()) return;
-        area.querySelector(".sheet-calculations")?.remove();
-        const q = document.querySelector("#search").value.toLowerCase(),
-          cls = document.querySelector("#class-filter").value;
-        const students = data.students
-          .filter(
-            (s) =>
-              s.active &&
-              s.name.toLowerCase().includes(q) &&
-              (!cls || s.classId === cls),
-          )
-          .sort(
-            (a, b) =>
-              (document.querySelector("#sort").value === "desc" ? -1 : 1) *
-              a.name.localeCompare(b.name),
-          );
-        const papers = data.papers.filter(
-          (p) => !cls || !p.classId || p.classId === cls,
-        );
-        sheet = marksController = mountSheet(document.querySelector("#sheet"), {
-          students,
-          papers,
-          marks: data.marks,
-          save: async (entries) => {
-            await api("/admin/marks", { entries }, "PUT");
-            for (const e of entries) {
-              let m = data.marks.find(
-                (m) => m.studentId === e.studentId && m.paperId === e.paperId,
-              );
-              if (m) Object.assign(m, e);
-              else data.marks.push({ ...e });
-            }
-          },
-          onStatus: (s, err) => {
-            const status = document.querySelector("#save-status");
-            if (status) {
-              status.textContent = s;
-              status.classList.toggle("error", !!err);
-            }
-          },
-        });
-      };
-      for (const selector of ["#search", "#class-filter", "#sort"])
-        document
-          .querySelector(selector)
-          .addEventListener(selector === "#search" ? "input" : "change", draw);
-      draw();
-      for (const action of ["undo", "redo", "fill"])
-        document.querySelector("#" + action).onclick = () => sheet[action]();
+      area.innerHTML = `<div class="top"><div><h2>Marks worksheet</h2><p class="muted">Select a class beside Name. Students and paper marks fill automatically.</p></div></div><div id="flexible-workspace"></div>`;
+      sheet = await mountMarksWorkbook(
+        document.querySelector("#flexible-workspace"),
+        data,
+        {
+          addStudent: (classId) => studentForm({ classId, active: true }, true),
+          addPaper: (classId) => paperForm({ classId }, true),
+        },
+      );
     } else if (page === "students") {
       area.innerHTML =
         '<div class="top"><h2>Student directory</h2><button id="add">+ Add student</button></div><div class="management-list"></div>';

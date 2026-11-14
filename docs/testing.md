@@ -34,3 +34,10 @@ New coverage exercises directory search, activity/publication filters, empty-sta
 ## Flexible worksheet
 
 Validation: 21 Node tests (16 API integration tests and five formula-engine tests) and 19 browser tests. Added checks cover private workbook access, CSRF, persisted formulas, revision conflicts, bounds validation, circular/invalid/extreme references, bounded parsing, aggregates, logical functions, copy/fill anchors, row insertion/deletion with undo, column addition, TSV paste, live recalculation, reload persistence, mobile overflow, numeric-only mark persistence, and failed-save navigation/retry. Formula expressions never execute JavaScript. Screenshots use isolated MongoDB fixture data.
+
+
+## Unified class marks worksheet
+
+23 Node tests (17 API tests and six formula/reference tests) and 20 browser tests cover the updated workflow. The previous two-workspace browser cases were replaced with checks for one worksheet, protected Name/paper headers, actual mark persistence, live formula persistence/recalculation, duplicate-name class isolation, dropdown-driven auto-fill, zero marks, empty classes, class selection across reload, preselected class in row/column creation dialogs, and failed-save class-change/navigation blocking. Existing paste, fill, undo/redo, validation, keyboard exit, mobile, auth, publication and student reveal coverage remains. Reference tests explicitly reorder student and paper IDs and verify missing references produce #REF!.
+
+A 501-student boundary test verifies that the Name class picker remains available when the all-students view exceeds the worksheet limit; selecting a small class loads normally. Playwright gracefully stops the fixture server so its temporary MongoDB data is removed.

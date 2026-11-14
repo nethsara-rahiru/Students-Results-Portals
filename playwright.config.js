@@ -8,6 +8,7 @@ export default defineConfig({
     command: "node tests/fixture-server.js",
     url: "http://localhost:3100",
     reuseExistingServer: false,
+    gracefulShutdown: { signal: "SIGTERM", timeout: 10000 },
     timeout: 120000,
   },
   reporter: "list",
