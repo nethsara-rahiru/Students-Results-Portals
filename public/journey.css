@@ -276,6 +276,8 @@
   top: 64%;
   font-size: 10px;
 }
+/* Light is painted by the background, not a filter on the moving digit reels.
+   Scaling a filtered reel can stall its first impact frame on slower GPUs. */
 .journey-score {
   position: absolute;
   top: 50%;
@@ -290,7 +292,7 @@
   line-height: 1;
   letter-spacing: -0.07em;
   text-shadow: none;
-  filter: drop-shadow(0 0 24px #159ed41a);
+  filter: none;
   opacity: 0;
   transition: color 0.9s;
 }
@@ -304,7 +306,7 @@
 .student-journey[data-final="true"] .journey-score {
   color: var(--journey-gold);
   text-shadow: none;
-  filter: drop-shadow(0 0 24px #e9d7a622);
+  filter: none;
 }
 .student-journey[data-state="identify"] .core-fill,
 .student-journey[data-state="access"] .core-fill {
@@ -625,13 +627,11 @@
 }
 .student-journey .journey-score {
   color: #d4efff;
-  transition:
-    color 0.9s,
-    filter 0.9s;
+  transition: color 0.9s;
 }
 .student-journey[data-final="true"] .journey-score {
   color: #d4efff;
-  filter: drop-shadow(0 0 24px #159ed41a);
+  filter: none;
 }
 .student-journey[data-complete="true"][data-score-band="gold"] .journey-score,
 .student-journey[data-complete="true"][data-score-band="celebration"]
@@ -639,7 +639,7 @@
 .student-journey[data-complete="true"][data-score-band="distinction"]
   .journey-score {
   color: var(--journey-gold);
-  filter: drop-shadow(0 0 28px #e9d7a633);
+  filter: none;
 }
 .student-journey[data-score-band="gold"] .score-atmosphere,
 .student-journey[data-score-band="celebration"] .score-atmosphere,
@@ -648,7 +648,7 @@
 }
 .student-journey[data-state="reveal"][data-complete="true"][data-score-band="distinction"]
   .journey-score {
-  filter: drop-shadow(0 0 34px #e9d7a64d);
+  filter: none;
 }
 @media (prefers-reduced-motion: reduce) {
   .score-wash,
@@ -673,49 +673,33 @@
   position: absolute;
   left: 0;
   top: 0;
-  width: var(--blast-size, 160vmax);
-  height: var(--blast-size, 160vmax);
-  border-radius: 50%;
+  width: 512px;
+  height: 512px;
   opacity: 0;
-  transform: translate(-50%, -50%) scale(0.06);
-  border: 1px solid #e5f7ff66;
-  background:
-    radial-gradient(circle at 32% 24%, #ffffff30, transparent 27%),
-    radial-gradient(
-      circle,
-      transparent 48%,
-      #9d59eb0a 60%,
-      #159ed425 70%,
-      #e5f7ff60 72%,
-      #ffffff0a 74%,
-      transparent 76%
-    );
-  box-shadow:
-    inset 0 0 70px #d9f4ff16,
-    0 0 60px #159ed418;
+  transform: translate(-50%, -50%) scale(calc(var(--blast-scale, 4) * 0.22));
+  background: url("/assets/blast-glass-blue.png") center / contain no-repeat;
 }
 .score-glass-echo {
-  border-color: #e9d7a630;
-  filter: blur(2px);
+  opacity: 0;
 }
 .student-journey[data-score-band="gold"] .score-glass,
 .student-journey[data-score-band="celebration"] .score-glass,
 .student-journey[data-score-band="distinction"] .score-glass {
-  background:
-    radial-gradient(circle at 32% 24%, #fff6df38, transparent 27%),
-    radial-gradient(
-      circle,
-      transparent 48%,
-      #9d59eb08 60%,
-      #e9d7a626 70%,
-      #fff1c95c 72%,
-      #ffffff0a 74%,
-      transparent 76%
-    );
+  background-image: url("/assets/blast-glass-gold.png");
 }
 @media (prefers-reduced-motion: reduce) {
   .score-glass,
   .score-suspense {
     display: none !important;
   }
+}
+
+/* Warm the glass textures during the roll, before the landing frame. */
+.score-atmosphere[data-ready="true"] .score-glass {
+  will-change: transform, opacity;
+  transform: translate(-50%, -50%) scale(calc(var(--blast-scale, 4) * 0.22));
+}
+
+.score-atmosphere[data-ready="true"]:not([data-impact="true"]) .score-glass {
+  opacity: 0.04;
 }

@@ -1630,7 +1630,11 @@ test("spinner colours develop gradually and the glass blast expands beyond the v
     await a.ready;
     a.currentTime = a.effect.getTiming().duration * 0.18;
     return {
-      width: parseFloat(getComputedStyle(n).width),
+      width:
+        parseFloat(getComputedStyle(n).width) *
+        Number(
+          getComputedStyle(n.parentElement).getPropertyValue("--blast-scale"),
+        ),
       view: innerWidth,
       opacity: Number(getComputedStyle(n).opacity),
     };
@@ -1736,3 +1740,93 @@ test("the final reel movement, glass blast and number pop share one completion f
       await page.getByRole("button", { name: "Next paper" }).click();
   }
 });
+
+for (const viewport of [
+  { width: 1280, height: 720 },
+  { width: 390, height: 844 },
+]) {
+  test(`visible reel landing and first painted glass impact stay together at ${viewport.width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize(viewport);
+    await page.route("**/api/results/*", (route) =>
+      route.fulfill({
+        json: {
+          student: "Single Student",
+          papers: [
+            { id: "paint-impact", name: "Painted impact", max: 100, value: 85 },
+          ],
+        },
+      }),
+    );
+    await identify(page, "Single Student");
+    await page.evaluate(() => {
+      window.impactFrames = [];
+      const watch = () => {
+        const score = document.querySelector("#score"),
+          strip = score.querySelector(".digit-strip");
+        if (strip) {
+          const glass = document.querySelector(".score-glass"),
+            style = getComputedStyle(glass);
+          const frame = {
+            time: performance.now(),
+            remaining:
+              (score.dataset.complete === "true" ? 0 : 48) +
+              new DOMMatrix(getComputedStyle(strip).transform).m42 /
+                parseFloat(getComputedStyle(strip).fontSize),
+            done: score.dataset.complete === "true",
+            opacity: Number(style.opacity),
+            scale: new DOMMatrix(style.transform).a,
+          };
+          window.impactFrames.push(frame);
+          if (frame.done) return;
+        }
+        requestAnimationFrame(watch);
+      };
+      requestAnimationFrame(watch);
+    });
+    await page.getByRole("button", { name: /Painted impact/ }).click();
+    await page.waitForFunction(
+      () => window.impactFrames.some((f) => f.done),
+      null,
+      { polling: "raf", timeout: 7000 },
+    );
+    const frames = await page.evaluate(() => window.impactFrames);
+    const impact = frames.find((f) => f.done);
+    const before = frames.filter(
+      (f) => impact.time - f.time >= 180 && impact.time - f.time <= 230,
+    );
+    expect(before.length).toBeGreaterThan(0);
+    // A substantial part of a digit must still be travelling; allow a frame
+    // of sampling jitter, while the separate gap check bounds first impact.
+    expect(Math.min(...before.map((f) => f.remaining))).toBeGreaterThan(0.5);
+    expect(Math.abs(impact.remaining)).toBeLessThan(0.01);
+    const previous = frames[frames.indexOf(impact) - 1];
+    expect(impact.time - previous.time).toBeLessThan(100);
+    expect(
+      await page.locator("#score .digit-strip").evaluateAll((nodes) =>
+        nodes.map((n) => ({
+          count: n.childElementCount,
+          text: n.textContent,
+        })),
+      ),
+    ).toEqual([
+      { count: 1, text: "8" },
+      { count: 1, text: "5" },
+    ]);
+    expect(impact.opacity).toBeGreaterThanOrEqual(0.5);
+    expect(impact.scale).toBeGreaterThanOrEqual(0.2);
+    await expect(page.locator("#score")).toHaveAttribute(
+      "aria-label",
+      "Score 85",
+    );
+    await page.screenshot({
+      path: `docs/screenshots/impact-${viewport.width}.png`,
+    });
+    await expect(page.locator(".score-glass").first()).toHaveCSS(
+      "opacity",
+      "0",
+      { timeout: 3500 },
+    );
+  });
+}
