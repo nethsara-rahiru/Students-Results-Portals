@@ -1,3 +1,4 @@
+import { createFormulaEntry } from "./formula-entry.js";
 import { api, esc, notify } from "./client.js";
 import {
   calculator,
@@ -43,12 +44,11 @@ export async function mountWorkbook(host, data, config = {}) {
       host.querySelector(`[data-action="${action}"]`).remove();
     host.querySelector('[data-action="add-row"]').textContent =
       "Add student row";
-    host.querySelector('[data-action="add-column"]').textContent =
-      "Add paper column";
+    host.querySelector('[data-action="add-column"]').textContent = "Add column";
     if (config.expandable) {
       for (const [action, label] of [
         ["working-row", "Add row"],
-        ["working-column", "Add column"],
+        ["working-column", "Add working column"],
       ]) {
         const button = document.createElement("button");
         button.className = "secondary";
@@ -59,7 +59,7 @@ export async function mountWorkbook(host, data, config = {}) {
     }
     const help = host.querySelector(".keyboard-guide");
     help.querySelector("p").textContent =
-      "Column A contains student names; row 1 contains paper headers. Add row/Add column creates blank working space; paste expands it automatically. Enter any cell address in the address box and press Enter to jump or expand. Large sheets render a scrolling window. Working cells stay private to teachers and can feed formulas in real mark cells. Use the dropdown beside Name to load a class. Add student row and Add paper column create real profiles and draft papers. Names and headers are protected; edit them from Students and Papers. Shift + click / arrows selects a range; copy/paste, Delete, fill down, undo and redo work on mark cells. A = absent; blank = no result; zero is a valid mark.";
+      "Column A contains student names; row 1 contains paper headers. Add column creates a paper, including calculated final marks. Add row/Add working column creates private working space; paste expands it automatically. Use Make column a paper to promote an existing working column. Enter any cell address in the address box and press Enter to jump or expand. Large sheets render a scrolling window. Working cells stay private to teachers and can feed formulas in real mark cells. Use the dropdown beside Name to load a class. Add student row and Add paper column create real profiles and draft papers. Names and headers are protected; edit them from Students and Papers. Shift + click / arrows selects a range; copy/paste, Delete, fill down, undo and redo work on mark cells. A = absent; blank = no result; zero is a valid mark.";
     help.querySelectorAll("p")[1].textContent =
       "Functions: SUM, AVERAGE, MIN, MAX, COUNT, COUNTA, ROUND, ABS, IF, AND, OR, NOT. Formulas recalculate in this worksheet and save validated numeric marks plus their formula. Use ROUND to keep at most two decimals. Formula references follow student and paper IDs when switching classes or when rows move; a missing reference shows #REF!. Publishing is managed separately in Papers. The supported Excel subset does not include macros or XLSX import/export; IF arguments evaluate eagerly.";
     const caption = document.createElement("p");
@@ -76,6 +76,25 @@ export async function mountWorkbook(host, data, config = {}) {
   const grid = host.querySelector(".workbook-grid"),
     bar = host.querySelector('[aria-label="Cell formula or value"]'),
     status = host.querySelector(".workbook-status");
+  const formulaUI = createFormulaEntry({
+    host,
+    bar,
+    address: ref,
+    getSelected: () => selected,
+    getRaw: (r, c) => state.cells[ref(r, c)] || "",
+    getValue: (r, c) =>
+      calculator(state.cells, state.rows, state.columns)(ref(r, c)),
+    canEdit: editable,
+    commit: (r, c, value) => change(() => set(r, c, value)),
+    onDraft: (value) => {
+      bar.value = value;
+      message("Editing formula · Enter to apply · Esc to cancel");
+    },
+    onCancel: () => {
+      if (!busy && !dirty) message("All changes saved");
+      paint();
+    },
+  });
   let inputs = [],
     visibleInputs = [],
     rendering = false,
@@ -177,7 +196,7 @@ export async function mountWorkbook(host, data, config = {}) {
     }
     if (document.activeElement !== host.querySelector("#cell-address"))
       host.querySelector("#cell-address").value = ref(...selected);
-    bar.value = state.cells[ref(...selected)] || "";
+    bar.value = formulaUI.draft() ?? state.cells[ref(...selected)] ?? "";
     bar.readOnly = !editable(...selected);
     const sum = nums.reduce((a, b) => a + b, 0),
       count = (r2 - r1 + 1) * (c2 - c1 + 1);
@@ -190,7 +209,16 @@ export async function mountWorkbook(host, data, config = {}) {
       Math.max(0, Math.min(state.columns - 1, c)),
     ];
     if (!extend) anchor = [...selected];
-    if (!inputs[selected[0]]?.[selected[1]]) {
+    const target = inputs[selected[0]]?.[selected[1]],
+      targetRect = target?.getBoundingClientRect(),
+      view = grid.getBoundingClientRect();
+    if (
+      !target ||
+      targetRect.right > view.right ||
+      targetRect.left < view.left + (selected[1] > 0 ? 275 : 0) ||
+      targetRect.bottom > view.bottom ||
+      targetRect.top < view.top + (selected[0] > 0 ? 84 : 0)
+    ) {
       for (let attempt = 0; attempt < 3; attempt++) {
         grid.scrollTop =
           rowScale() > 1
@@ -208,6 +236,7 @@ export async function mountWorkbook(host, data, config = {}) {
     } else paint();
   }
   function render() {
+    if (formulaUI.editing()) formulaUI.moveToBar();
     rendering = true;
     const scroll = [grid.scrollTop, grid.scrollLeft];
     const rStart = rowStart(),
@@ -327,8 +356,11 @@ export async function mountWorkbook(host, data, config = {}) {
         input.spellcheck = false;
         input.onpointerdown = (e) => {
           if (busy) return;
+          if (formulaUI.insertReference(r, c, e)) return;
           select(r, c, e.shiftKey);
         };
+        input.onpointerenter = (e) => formulaUI.pointerEnter(r, c, e);
+        formulaUI.attach(input, r, c);
         input.onfocus = () => {
           selected = [r, c];
           paint();
@@ -337,11 +369,35 @@ export async function mountWorkbook(host, data, config = {}) {
           if (!editable(r, c)) return;
           input.value = state.cells[ref(r, c)] || "";
           input.select();
+          input.dispatchEvent(new Event("input", { bubbles: true }));
         };
-        input.onchange = () => change(() => set(r, c, input.value));
-        input.onkeydown = (e) => navigate(e, r, c);
+        input.onchange = () => formulaUI.changed(input, r, c);
+        input.onkeydown = (e) => {
+          if (!formulaUI.keydown(e, input, r, c)) navigate(e, r, c);
+        };
         const td = row.insertCell();
         td.append(input);
+        if (
+          bound &&
+          r === 0 &&
+          (config.canConvert ? config.canConvert(c) : c > config.paperCount) &&
+          config.convertColumn
+        ) {
+          td.classList.add("convertible-heading");
+          const convert = document.createElement("button");
+          convert.type = "button";
+          convert.className = "convert-column";
+          convert.innerHTML =
+            '<svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19 19 5M6 5h13v13" fill="none" stroke="currentColor" stroke-width="2"/></svg>';
+          convert.setAttribute(
+            "aria-label",
+            "Make column " + columnName(c) + " a paper",
+          );
+          convert.title = "Use this column as a paper";
+          convert.onclick = () =>
+            config.convertColumn(c, state.cells[ref(0, c)] || "");
+          td.append(convert);
+        }
         if (bound && r === 0 && c === 0) {
           td.className = "name-heading";
           const picker = document.createElement("details");
@@ -384,10 +440,13 @@ export async function mountWorkbook(host, data, config = {}) {
       if (windowKey === nextR + ":" + nextC) return;
       const active = document.activeElement,
         focused = visibleInputs.find((cell) => cell.input === active);
-      if (focused) active.blur();
+      if (focused) {
+        if (formulaUI.owns(active)) formulaUI.moveToBar();
+        else active.blur();
+      }
       const redraw = () => {
         render();
-        if (focused) {
+        if (focused && !formulaUI.editing()) {
           const input = inputs[focused.r]?.[focused.c];
           if (input) input.focus({ preventScroll: true });
           else grid.focus({ preventScroll: true });
@@ -633,12 +692,24 @@ export async function mountWorkbook(host, data, config = {}) {
   grid.addEventListener("keydown", (event) => {
     if (event.target === grid) navigate(event, ...selected);
   });
-  bar.onchange = () => change(() => set(...selected, bar.value));
+  bar.onpointerdown = (e) => {
+    if (formulaUI.editing() && !formulaUI.owns(bar)) {
+      e.preventDefault();
+      formulaUI.moveToBar();
+    }
+  };
+  bar.onfocus = () => formulaUI.startBar();
+  bar.oninput = () => formulaUI.barInput();
+  bar.onchange = () => formulaUI.changed(bar, ...selected);
   bar.onkeydown = (e) => {
+    if (formulaUI.keydown(e, bar, ...selected)) return;
     if (e.key === "Enter") {
       e.preventDefault();
       bar.blur();
-      idle.then(() => focusCell(...selected));
+      idle.then(() => {
+        select(...selected);
+        focusCell(...selected);
+      });
     }
   };
   host.querySelector(".workbook-ribbon").onclick = (e) => {
@@ -716,6 +787,7 @@ export async function mountWorkbook(host, data, config = {}) {
       });
   };
   grid.addEventListener("copy", (e) => {
+    if (formulaUI.owns(e.target)) return;
     e.preventDefault();
     const [r1, c1, r2, c2] = bounds();
     if ((r2 - r1 + 1) * (c2 - c1 + 1) > 50000) {
@@ -748,6 +820,7 @@ export async function mountWorkbook(host, data, config = {}) {
     );
   });
   grid.addEventListener("paste", (e) => {
+    if (formulaUI.owns(e.target)) return;
     e.preventDefault();
     let lines = e.clipboardData
       .getData("text/plain")
@@ -822,10 +895,19 @@ export async function mountWorkbook(host, data, config = {}) {
   });
   render();
   return {
+    reveal: (r, c) => {
+      select(r, c);
+      focusCell(r, c);
+    },
     isBusy: () => busy,
     whenIdle: () => idle,
     hasUnsavedChanges: () => {
-      if (busy || dirty || bar.value !== (state.cells[ref(...selected)] || ""))
+      if (
+        formulaUI.dirty() ||
+        busy ||
+        dirty ||
+        bar.value !== (state.cells[ref(...selected)] || "")
+      )
         return true;
       const active = document.activeElement;
       if (!grid.contains(active) || active.tagName !== "INPUT") return false;

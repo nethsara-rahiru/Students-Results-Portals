@@ -6,6 +6,7 @@ export function bindingsFor(
   papers,
   allowExtra = false,
   scope,
+  slotForIndex = (index) => index,
 ) {
   const bindings = new Map();
   formula.replace(references, (whole, ac, col, ar, row) => {
@@ -24,7 +25,9 @@ export function bindingsFor(
         ? { extraScope: scope }
         : {}),
       ...(r > students.length ? { extraRow: r - students.length - 1 } : {}),
-      ...(c > papers.length ? { extraColumn: c - papers.length - 1 } : {}),
+      ...(c > papers.length
+        ? { extraColumn: slotForIndex(c - papers.length - 1) }
+        : {}),
     });
     return whole;
   });
@@ -40,7 +43,15 @@ export function rebaseFormula(mark, students, papers, scope) {
     const binding = map.get(col.toUpperCase() + row);
     if (
       !binding ||
-      (binding.extraScope && scope && binding.extraScope !== scope)
+      (binding.extraScope &&
+        scope &&
+        binding.extraScope !== scope &&
+        (binding.extraRow !== undefined ||
+          !papers.some(
+            (p) =>
+              p.worksheetSource?.scope === binding.extraScope &&
+              p.worksheetSource?.columnKey === "x" + binding.extraColumn,
+          )))
     )
       return "#REF!";
     const r =
@@ -49,9 +60,26 @@ export function rebaseFormula(mark, students, papers, scope) {
         : binding.studentId
           ? students.findIndex((s) => s._id === binding.studentId) + 1
           : 0;
+    const promoted = papers.findIndex(
+      (p) =>
+        p.worksheetSource?.scope === binding.extraScope &&
+        p.worksheetSource?.columnKey === "x" + binding.extraColumn,
+    );
+    const used = papers
+      .filter(
+        (p) =>
+          p.worksheetSource &&
+          p.worksheetSource.scope === (binding.extraScope || scope),
+      )
+      .map((p) => Number(p.worksheetSource.columnKey.slice(1)));
     const c =
       binding.extraColumn !== undefined
-        ? papers.length + 1 + binding.extraColumn
+        ? promoted >= 0
+          ? promoted + 1
+          : papers.length +
+            1 +
+            binding.extraColumn -
+            used.filter((slot) => slot < binding.extraColumn).length
         : binding.paperId
           ? papers.findIndex((p) => p._id === binding.paperId) + 1
           : 0;

@@ -1,3 +1,4 @@
+import { worksheetModel } from "./worksheet-model.js";
 import { api, notify } from "./client.js";
 import { mountWorkbook } from "./workbook.js";
 import { calculator, columnName, coordinates } from "./formulas.js";
@@ -25,83 +26,28 @@ export async function mountMarksWorkbook(
     }
     loading = true;
     try {
-      let students = data.students
-        .filter(
-          (s) =>
-            s.active &&
-            (!next ||
-              (next === "unassigned" ? !s.classId : s.classId === next)),
-        )
-        .sort(
-          (a, b) => a.name.localeCompare(b.name) || a._id.localeCompare(b._id),
-        );
-      let papers = data.papers.filter(
-        (p) => !next || !p.classId || p.classId === next,
-      );
-      const scope = next || "all";
-      const space = await api("/admin/worksheet-space/" + scope);
-      const studentRows = new Map(students.map((s, r) => [s._id, r + 1]));
-      const paperColumns = new Map(papers.map((p, c) => [p._id, c + 1]));
+      const scope = next || "all",
+        space = await api("/admin/worksheet-space/" + scope);
+      const model = worksheetModel(data, space, scope);
+      const {
+        students,
+        papers,
+        studentRows,
+        paperColumns,
+        rowKey,
+        columnKey,
+        rowFor,
+        columnFor,
+        isMark,
+        state,
+        slotForIndex,
+      } = model;
       const markMap = new Map(
         data.marks.map((m) => [m.studentId + ":" + m.paperId, m]),
       );
-      const rowKey = (r) =>
-        r === 0 ? "h" : students[r - 1]?._id || "x" + (r - students.length - 1);
-      const columnKey = (c) =>
-        c === 0 ? "h" : papers[c - 1]?._id || "x" + (c - papers.length - 1);
-      const rowFor = (key) =>
-        key === "h"
-          ? 0
-          : key.startsWith("x")
-            ? students.length + 1 + Number(key.slice(1))
-            : studentRows.get(key);
-      const columnFor = (key) =>
-        key === "h"
-          ? 0
-          : key.startsWith("x")
-            ? papers.length + 1 + Number(key.slice(1))
-            : paperColumns.get(key);
       const extraMap = new Map(
         space.cells.map((cell) => [cell.rowKey + ":" + cell.columnKey, cell]),
       );
-      const cells = { A1: "Name" };
-      papers.forEach((p, c) => (cells[columnName(c + 1) + "1"] = p.name));
-      students.forEach(
-        (student, r) =>
-          (cells["A" + (r + 2)] =
-            student.name + (student.label ? " · " + student.label : "")),
-      );
-      for (const mark of data.marks) {
-        const r = studentRows.get(mark.studentId),
-          c = paperColumns.get(mark.paperId);
-        if (r && c)
-          cells[columnName(c) + (r + 1)] = mark.formula
-            ? rebaseFormula(mark, students, papers, scope)
-            : mark.status === "absent"
-              ? "A"
-              : String(mark.value ?? "");
-      }
-      for (const cell of space.cells) {
-        const r = rowFor(cell.rowKey),
-          c = columnFor(cell.columnKey);
-        if (r !== undefined && c !== undefined)
-          cells[columnName(c) + (r + 1)] = cell.value.startsWith("=")
-            ? rebaseFormula(
-                { formula: cell.value, formulaBindings: cell.formulaBindings },
-                students,
-                papers,
-                scope,
-              )
-            : cell.value;
-      }
-      const state = {
-        rows: Math.max(2, students.length + 1 + space.extraRows),
-        columns: Math.max(2, papers.length + 1 + space.extraColumns),
-        cells,
-        revision: 0,
-      };
-      const isMark = (r, c) =>
-        r > 0 && c > 0 && !!students[r - 1] && !!papers[c - 1];
       const editable = (r, c) => {
         if (
           (r === 0 && c <= papers.length) ||
@@ -123,6 +69,20 @@ export async function mountMarksWorkbook(
         caption: `${next === "unassigned" ? "Students without a class" : data.classes.find((cls) => cls._id === next)?.name || "All students"} · ${students.length} students · ${papers.length} papers · Working rows and columns grow as needed`,
         addStudent: () => addStudent?.(next === "unassigned" ? "" : next),
         addPaper: () => addPaper?.(next === "unassigned" ? "" : next),
+        canConvert: (c) =>
+          c > papers.length ||
+          (papers[c - 1]?.worksheetSource?.scope === scope &&
+            !papers[c - 1].worksheetImportComplete),
+        convertColumn: (c, name) => {
+          const paper = papers[c - 1],
+            source = paper?.worksheetSource;
+          addPaper?.(next === "unassigned" ? "" : next, {
+            scope: source?.scope || scope,
+            columnKey: source?.columnKey || columnKey(c),
+            name: paper?.name || name || "Final marks",
+            max: paper?.max || 100,
+          });
+        },
         classes: data.classes,
         classId: next,
         onClassChange: load,
@@ -192,7 +152,14 @@ export async function mountMarksWorkbook(
               status,
               formula,
               formulaBindings: formula
-                ? bindingsFor(formula, students, papers, true, scope)
+                ? bindingsFor(
+                    formula,
+                    students,
+                    papers,
+                    true,
+                    scope,
+                    slotForIndex,
+                  )
                 : [],
             });
           }
@@ -205,7 +172,14 @@ export async function mountMarksWorkbook(
               columnKey: columnKey(c),
               value,
               formulaBindings: value.startsWith("=")
-                ? bindingsFor(value, students, papers, true, scope)
+                ? bindingsFor(
+                    value,
+                    students,
+                    papers,
+                    true,
+                    scope,
+                    slotForIndex,
+                  )
                 : [],
             };
             pendingExtras.set(cell.rowKey + ":" + cell.columnKey, cell);
@@ -267,7 +241,7 @@ export async function mountMarksWorkbook(
           });
           const dimensions = {
             extraRows: Math.max(0, workbook.rows - students.length - 1),
-            extraColumns: Math.max(0, workbook.columns - papers.length - 1),
+            extraColumns: model.extraExtent(workbook.columns),
           };
           await batches(changes.length ? changes : [null], async (batch) => {
             const changed = batch.filter(Boolean);
@@ -285,6 +259,17 @@ export async function mountMarksWorkbook(
           return { revision: workbook.revision + 1 };
         },
       });
+      const pendingPaper = sessionStorage.getItem("levelup-new-paper");
+      if (pendingPaper && paperColumns.has(pendingPaper)) {
+        const column = paperColumns.get(pendingPaper),
+          paper = papers[column - 1],
+          row =
+            students.findIndex(
+              (student) => !paper.classId || student.classId === paper.classId,
+            ) + 1;
+        controller.reveal(row > 0 ? row : 0, column);
+        sessionStorage.removeItem("levelup-new-paper");
+      }
       classId = next;
       sessionStorage.setItem("levelup-admin-class", next);
       return true;
