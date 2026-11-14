@@ -44,7 +44,7 @@ test("no suggestions before submission, multi-paper reveal and final celebration
     { timeout: 6000 },
   );
   await expect(page.locator(".badge")).toBeVisible();
-  await expect(page.locator(".confetti")).toHaveCount(40);
+  await expect(page.locator(".confetti")).toHaveCount(64);
   await expect(page.locator("#message")).toContainText(
     "20.0 percentage points",
   );
@@ -1407,4 +1407,165 @@ test("automatic column maximum can be corrected in optional settings without los
       (mark) => mark.paperId === paper._id && mark.value === 150,
     ),
   ).toBeTruthy();
+});
+
+test("score ranges change the persistent atmosphere, burst, gold and final celebration", async ({
+  page,
+}) => {
+  test.setTimeout(60000);
+  const values = [9, 15, 60, 72, 40],
+    maxima = [100, 100, 100, 100, 50];
+  await page.route("**/api/results/*", (route) =>
+    route.fulfill({
+      json: {
+        student: "Single Student",
+        papers: values.map((value, i) => ({
+          id: `range-${i}`,
+          name: `Range paper ${i + 1}`,
+          subject: "Mathematics",
+          value,
+          max: maxima[i],
+        })),
+      },
+    }),
+  );
+  await identify(page, "Single Student");
+  await page.evaluate(
+    () =>
+      (window.originalAtmosphere = document.querySelector(".score-atmosphere")),
+  );
+  const root = page.locator(".student-journey");
+  for (const [i, band] of [
+    "under-10",
+    "under-20",
+    "burst",
+    "gold",
+    "celebration",
+  ].entries()) {
+    await page
+      .getByRole("button", { name: new RegExp(`Range paper ${i + 1}`) })
+      .click();
+    await expect(root).toHaveAttribute("data-score-band", band);
+    await expect(page.locator("#score")).toHaveAttribute(
+      "aria-label",
+      `Score ${values[i]}`,
+      { timeout: 7000 },
+    );
+    await expect(root).toHaveAttribute("data-complete", "true");
+    await expect(root).toHaveAttribute(
+      "data-score-effect",
+      i < 2 ? "gentle" : "burst",
+    );
+    if (i < 2)
+      await expect(page.locator(".score-wash-red")).toHaveCSS(
+        "opacity",
+        i === 0 ? "0.92" : "0.48",
+      );
+    if (i === 2)
+      expect(
+        await page
+          .locator(".score-ray")
+          .evaluateAll((nodes) =>
+            nodes.some((n) =>
+              n.getAnimations().some((a) => a.playState === "running"),
+            ),
+          ),
+      ).toBe(true);
+    if (i >= 3)
+      await expect(page.locator("#score")).toHaveCSS(
+        "color",
+        "rgb(233, 215, 166)",
+      );
+    await expect(page.locator(".confetti")).toHaveCount(i === 4 ? 64 : 0);
+    expect(
+      await page.evaluate(
+        () =>
+          window.originalAtmosphere ===
+          document.querySelector(".score-atmosphere"),
+      ),
+    ).toBe(true);
+    await page.screenshot({ path: `docs/screenshots/score-${band}.png` });
+    if (i < 4) await page.getByRole("button", { name: "Next paper" }).click();
+  }
+  await page.getByRole("button", { name: "Replay journey" }).click();
+  await expect(root).not.toHaveAttribute("data-score-band", /.+/);
+  await expect(page.locator(".confetti")).toHaveCount(0);
+});
+
+test("a final low score gets a larger completion celebration and clears previous gold", async ({
+  page,
+}) => {
+  await page.route("**/api/results/*", (route) =>
+    route.fulfill({
+      json: {
+        student: "Single Student",
+        papers: [
+          { id: "high", name: "High paper", max: 100, value: 95 },
+          { id: "low", name: "Low paper", max: 100, value: 5 },
+        ],
+      },
+    }),
+  );
+  await identify(page, "Single Student");
+  await page.getByRole("button", { name: /High paper/ }).click();
+  await expect(page.locator(".confetti")).toHaveCount(24, { timeout: 7000 });
+  await page.getByRole("button", { name: "Next paper" }).click();
+  await page.getByRole("button", { name: /Low paper/ }).click();
+  await expect(page.locator("#score")).toHaveAttribute(
+    "aria-label",
+    "Score 5",
+    { timeout: 7000 },
+  );
+  await expect(page.locator(".confetti")).toHaveCount(40);
+  await expect(page.locator("#score")).toHaveCSS("color", "rgb(212, 239, 255)");
+  await expect(page.locator("#message")).not.toContainText(
+    /fail|poor|personal best/i,
+  );
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await expect(page.locator(".confetti")).toHaveCount(0);
+  expect(
+    await page
+      .locator(".score-ray")
+      .evaluateAll((nodes) =>
+        nodes.every((n) => n.getAnimations().length === 0),
+      ),
+  ).toBe(true);
+});
+
+test("reduced motion and Skip keep high-score effects static and exact", async ({
+  page,
+}) => {
+  await page.route("**/api/results/*", (route) =>
+    route.fulfill({
+      json: {
+        student: "Single Student",
+        papers: [{ id: "high", name: "High paper", max: 50, value: 40 }],
+      },
+    }),
+  );
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await identify(page, "Single Student");
+  await page.getByRole("button", { name: /High paper/ }).click();
+  await expect(page.locator("#score")).toHaveAttribute(
+    "aria-label",
+    "Score 40",
+  );
+  await expect(page.locator("#score")).toHaveCSS("color", "rgb(233, 215, 166)");
+  await expect(page.locator(".confetti")).toHaveCount(0);
+  await page.getByRole("button", { name: "Replay journey" }).click();
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.getByRole("button", { name: /High paper/ }).click();
+  await page.getByRole("button", { name: /Skip animation/ }).click();
+  await expect(page.locator("#score")).toHaveAttribute(
+    "aria-label",
+    "Score 40",
+  );
+  await expect(page.locator(".confetti")).toHaveCount(0);
+  expect(
+    await page
+      .locator(".score-ray")
+      .evaluateAll((nodes) =>
+        nodes.every((n) => n.getAnimations().length === 0),
+      ),
+  ).toBe(true);
 });

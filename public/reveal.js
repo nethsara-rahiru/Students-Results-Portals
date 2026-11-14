@@ -83,25 +83,28 @@ export function motivation(papers, index) {
     ? "Your preparation is showing. Keep nurturing your curiosity."
     : "Every step gives you something to build on. Keep practising, and ask for support when you need it.";
 }
-export function celebrate(host, reduced) {
-  if (reduced) return;
-  const colors = [
+export function celebrate(host, reduced, { count = 40, colors: palette } = {}) {
+  if (reduced) return () => {};
+  const colors = palette || [
     "var(--primary-start)",
     "var(--primary-end)",
     "#e9c982",
     "#9cdecf",
   ];
-  for (let i = 0; i < 40; i++) {
+  const bits = [];
+  for (let i = 0; i < count; i++) {
     const bit = document.createElement("i");
     bit.className = "confetti";
     bit.style.left = `${(i * 37) % 100}%`;
-    bit.style.background = colors[i % 4];
+    bit.style.background = colors[i % colors.length];
     bit.style.animationDelay = `${(i % 8) * 0.08}s`;
     bit.style.setProperty("--drift", `${(i % 2 ? 1 : -1) * (20 + i)}px`);
     host.append(bit);
+    bits.push(bit);
   }
-  setTimeout(
-    () => host.querySelectorAll(".confetti").forEach((x) => x.remove()),
-    5000,
-  );
+  const timer = setTimeout(() => bits.forEach((bit) => bit.remove()), 5000);
+  return () => {
+    clearTimeout(timer);
+    bits.forEach((bit) => bit.remove());
+  };
 }

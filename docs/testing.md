@@ -58,3 +58,7 @@ Login-rate tests verify that successful teacher sign-ins do not consume the fail
 ## No-form automatic columns
 
 30 Node tests (20 API tests and ten formula/model tests) and 28 browser tests cover this update. Add column and spare numeric/formula columns register as draft papers without a creation dialog; headings edit inline and class assignments persist. Tests retain the published average's real student journey, function completion, clicked references, large sparse sheets, and failed-save protection. Additional checks distinguish notes/spare rows from actual result columns and recover a non-default maximum through optional settings without discarding saved inputs.
+
+## Score-range reveals
+
+33 Node tests and 31 browser tests cover the current update. New unit checks cover exact score boundaries, percentage normalization for different maxima, cumulative effect flags and invalid results. Browser checks exercise deep/soft red backgrounds, a running burst, gold digits, normalized final confetti, persistent atmosphere identity, replay cleanup, a low-score final celebration, live reduced-motion changes, and Skip animation. Existing actual spinner completion, single/multiple-paper ordering, mobile layout, keyboard access, admin, worksheet and publishing regressions remain included. Range screenshots contain synthetic fixture scores only.
