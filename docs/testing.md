@@ -41,3 +41,10 @@ Validation: 21 Node tests (16 API integration tests and five formula-engine test
 23 Node tests (17 API tests and six formula/reference tests) and 20 browser tests cover the updated workflow. The previous two-workspace browser cases were replaced with checks for one worksheet, protected Name/paper headers, actual mark persistence, live formula persistence/recalculation, duplicate-name class isolation, dropdown-driven auto-fill, zero marks, empty classes, class selection across reload, preselected class in row/column creation dialogs, and failed-save class-change/navigation blocking. Existing paste, fill, undo/redo, validation, keyboard exit, mobile, auth, publication and student reveal coverage remains. Reference tests explicitly reorder student and paper IDs and verify missing references produce #REF!.
 
 A 501-student boundary test verifies that the Name class picker remains available when the all-students view exceeds the worksheet limit; selecting a small class loads normally. Playwright gracefully stops the fixture server so its temporary MongoDB data is removed.
+
+
+## Expandable worksheet
+
+26 Node tests (19 API tests and seven formula/reference tests) and 23 browser tests cover the current iteration. New coverage verifies sparse private storage beyond the previous dimensions, CSRF/auth, protection of real mark cells, large sparse aggregate ranges, cross-scope formula safety, one-click row/column growth, paste expansion with 3,000 saved cells, reload persistence, working-cell formulas feeding validated marks, a 501-student rendered window, and direct editing at row 2,000,000 / column 200,001. Large-sheet browser checks assert that fewer than 1,100 cell inputs are mounted. Existing admin and student regressions remain in the suite. Test data is isolated and synthetic; the distant-cell test creates a sparse note, not a full matrix of records.
+
+Login-rate tests verify that successful teacher sign-ins do not consume the failed-login allowance, while ten incorrect-password attempts still trigger throttling.

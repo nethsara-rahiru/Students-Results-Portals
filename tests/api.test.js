@@ -582,3 +582,130 @@ test("marks retain formula metadata and still reject invalid numeric marks", asy
     400,
   );
 });
+
+test("sparse working space has no fixed row/column ceiling and cannot overwrite mark records", async () => {
+  const agent = request.agent(app);
+  let token = (await agent.get("/api/session")).body.csrf;
+  token = (
+    await write(
+      agent,
+      "/api/login",
+      { username: "teacher", password: "correct-password" },
+      "post",
+      token,
+    )
+  ).body.csrf;
+  const url = "/api/admin/worksheet-space/all";
+  assert.equal((await publicAgent.get(url)).status, 401);
+  const body = {
+    extraRows: 2000000,
+    extraColumns: 20000,
+    entries: [
+      {
+        rowKey: "x1999999",
+        columnKey: "x19999",
+        value: "=SUM(1,2)",
+        formulaBindings: [],
+      },
+    ],
+  };
+  assert.equal((await agent.put(url).send(body)).status, 403);
+  assert.equal((await write(agent, url, body, "put", token)).status, 200);
+  const saved = (await agent.get(url)).body;
+  assert.equal(saved.extraRows, 2000000);
+  assert.equal(saved.extraColumns, 20000);
+  assert.equal(saved.cells[0].value, "=SUM(1,2)");
+  assert.equal(
+    (
+      await write(
+        agent,
+        url,
+        {
+          ...body,
+          entries: [{ rowKey: studentId, columnKey: paperId, value: "50" }],
+        },
+        "put",
+        token,
+      )
+    ).status,
+    400,
+  );
+  assert.equal(
+    (
+      await write(
+        agent,
+        url,
+        {
+          ...body,
+          entries: [{ rowKey: "x2000000", columnKey: "x0", value: "1" }],
+        },
+        "put",
+        token,
+      )
+    ).status,
+    400,
+  );
+  assert.equal(
+    (
+      await write(
+        agent,
+        url,
+        {
+          extraRows: 1,
+          extraColumns: 1,
+          entries: [{ rowKey: "x1999999", columnKey: "x19999", value: "" }],
+        },
+        "put",
+        token,
+      )
+    ).status,
+    200,
+  );
+  assert.equal((await agent.get(url)).body.cells.length, 0);
+});
+
+test("successful sign-ins do not consume the failed-login limit", async () => {
+  const isolated = await createApp({
+    db,
+    client,
+    config: { secret: "isolated-login-secret-".repeat(4) },
+  });
+  const agent = request.agent(isolated);
+  let token = (await agent.get("/api/session")).body.csrf;
+  for (let i = 0; i < 12; i++) {
+    const response = await write(
+      agent,
+      "/api/login",
+      { username: "teacher", password: "correct-password" },
+      "post",
+      token,
+    );
+    assert.equal(response.status, 200);
+    token = response.body.csrf;
+  }
+  for (let i = 0; i < 10; i++)
+    assert.equal(
+      (
+        await write(
+          agent,
+          "/api/login",
+          { username: "teacher", password: "wrong-password" },
+          "post",
+          token,
+        )
+      ).status,
+      401,
+    );
+  assert.equal(
+    (
+      await write(
+        agent,
+        "/api/login",
+        { username: "teacher", password: "wrong-password" },
+        "post",
+        token,
+      )
+    ).status,
+    429,
+  );
+});

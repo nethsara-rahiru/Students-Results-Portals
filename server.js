@@ -123,6 +123,9 @@ export async function createApp({ db, client, config = {} }) {
         validator: { $jsonSchema: { bsonType: "object", ...schema } },
       });
   await Promise.all([
+    db
+      .collection("worksheetCells")
+      .createIndex({ scope: 1, rowKey: 1, columnKey: 1 }, { unique: true }),
     db.collection("students").createIndex({ nameKey: 1, active: 1 }),
     db
       .collection("marks")
@@ -195,10 +198,11 @@ export async function createApp({ db, client, config = {} }) {
       },
     }),
   );
-  const limiter = (limit, windowMs = 900000) =>
+  const limiter = (limit, windowMs = 900000, skipSuccessfulRequests = false) =>
     rateLimit({
       windowMs,
       limit,
+      skipSuccessfulRequests,
       standardHeaders: "draft-7",
       legacyHeaders: false,
       handler: (_req, res) =>
@@ -250,7 +254,7 @@ export async function createApp({ db, client, config = {} }) {
     });
   app.post(
     "/api/login",
-    limiter(10),
+    limiter(10, 900000, true),
     wrap(async (req, res) => {
       const { username, password } = z
         .object({
@@ -301,6 +305,104 @@ export async function createApp({ db, client, config = {} }) {
         db.collection("classes").find().sort({ name: 1 }).toArray(),
       ]);
       res.json({ students, papers, marks, classes });
+    }),
+  );
+  const spaceScope = z.string().regex(/^(all|unassigned|[a-f0-9]{24})$/);
+  const axisKey = z.string().regex(/^(h|[a-f0-9]{24}|x[0-9]+)$/);
+  const referenceBinding = z.object({
+    ref: z.string().regex(/^[A-Z]+[1-9]\d*$/),
+    studentId: id.nullable(),
+    paperId: id.nullable(),
+    extraRow: z.number().int().min(0).optional(),
+    extraColumn: z.number().int().min(0).optional(),
+    extraScope: spaceScope.optional(),
+  });
+  app.get(
+    "/api/admin/worksheet-space/:scope",
+    wrap(async (req, res) => {
+      const scope = spaceScope.parse(req.params.scope);
+      const [space, cells] = await Promise.all([
+        db.collection("worksheetSpaces").findOne({ _id: scope }),
+        db
+          .collection("worksheetCells")
+          .find({ scope }, { projection: { _id: 0, scope: 0 } })
+          .toArray(),
+      ]);
+      res.json({
+        extraRows: space?.extraRows ?? 10,
+        extraColumns: space?.extraColumns ?? 3,
+        cells,
+      });
+    }),
+  );
+  app.put(
+    "/api/admin/worksheet-space/:scope",
+    wrap(async (req, res) => {
+      const scope = spaceScope.parse(req.params.scope);
+      const body = z
+        .object({
+          extraRows: z.number().int().min(0),
+          extraColumns: z.number().int().min(0),
+          entries: z
+            .array(
+              z.object({
+                rowKey: axisKey,
+                columnKey: axisKey,
+                value: z.string().max(1000),
+                formulaBindings: z.array(referenceBinding).max(200).default([]),
+              }),
+            )
+            .max(200),
+        })
+        .parse(req.body);
+      for (const cell of body.entries) {
+        if (!cell.rowKey.startsWith("x") && !cell.columnKey.startsWith("x"))
+          throw fail(
+            400,
+            "Working cells cannot overwrite student names or actual marks",
+          );
+        if (
+          cell.value &&
+          ((cell.rowKey.startsWith("x") &&
+            Number(cell.rowKey.slice(1)) >= body.extraRows) ||
+            (cell.columnKey.startsWith("x") &&
+              Number(cell.columnKey.slice(1)) >= body.extraColumns))
+        )
+          throw fail(400, "Working cell outside saved dimensions");
+      }
+      if (body.entries.length)
+        await db.collection("worksheetCells").bulkWrite(
+          body.entries.map(({ rowKey, columnKey, value, formulaBindings }) =>
+            value === ""
+              ? { deleteOne: { filter: { scope, rowKey, columnKey } } }
+              : {
+                  updateOne: {
+                    filter: { scope, rowKey, columnKey },
+                    update: { $set: { value, formulaBindings } },
+                    upsert: true,
+                  },
+                },
+          ),
+        );
+      await db.collection("worksheetSpaces").updateOne(
+        { _id: scope },
+        {
+          $set: {
+            extraRows: body.extraRows,
+            extraColumns: body.extraColumns,
+            updatedAt: new Date(),
+            updatedBy: req.session.admin,
+          },
+        },
+        { upsert: true },
+      );
+      await audit(req, "save", "worksheet-space", {
+        scope,
+        count: body.entries.length,
+        extraRows: body.extraRows,
+        extraColumns: body.extraColumns,
+      });
+      res.json({ ok: true });
     }),
   );
   app.get(
@@ -505,7 +607,7 @@ export async function createApp({ db, client, config = {} }) {
   app.put(
     "/api/admin/paper-order",
     wrap(async (req, res) => {
-      const ids = z.array(id).max(1000).parse(req.body.ids);
+      const ids = z.array(id).parse(req.body.ids);
       const count = await db.collection("papers").countDocuments();
       if (
         new Set(ids).size !== count ||
@@ -544,16 +646,7 @@ export async function createApp({ db, client, config = {} }) {
             "Formula must begin with =",
           )
           .default(""),
-        formulaBindings: z
-          .array(
-            z.object({
-              ref: z.string().regex(/^[A-Z]{1,3}[1-9]\d{0,6}$/),
-              studentId: id.nullable(),
-              paperId: id.nullable(),
-            }),
-          )
-          .max(200)
-          .default([]),
+        formulaBindings: z.array(referenceBinding).max(200).default([]),
       });
       const entries = z
         .array(entry)

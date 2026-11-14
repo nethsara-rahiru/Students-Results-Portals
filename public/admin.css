@@ -1070,3 +1070,51 @@ body[data-admin-page="marks"] .workspace {
   background: #159ed40c;
   margin: 4px 0 18px;
 }
+.formula-bar #cell-address {
+  width: 85px;
+  flex-shrink: 0;
+  padding: 12px 8px;
+  color: #a9ddec;
+  border: 0;
+  border-right: 1px solid #3c4e6e;
+  border-radius: 0;
+  background: transparent;
+  font-size: 12px;
+}
+.workbook-grid td,
+.workbook-grid tbody th {
+  height: 44px;
+}
+.workbook-grid td input {
+  height: 44px;
+}
+.workbook-grid .worksheet-spacer,
+.workbook-grid .worksheet-spacer > td {
+  padding: 0 !important;
+  border: 0 !important;
+  min-width: 0 !important;
+  background: transparent !important;
+  position: static !important;
+}
+.workbook-grid tr.worksheet-spacer {
+  height: auto;
+}
+.workbook-grid tr.worksheet-spacer td {
+  height: inherit;
+}
+.workbook-grid th {
+  overflow: visible;
+}
+.marks-bound-workbook .workbook-grid td.worksheet-spacer {
+  min-width: 0 !important;
+  width: auto;
+}
+.marks-bound-workbook .workbook-grid tbody td input {
+  box-sizing: border-box;
+}
+.marks-bound-workbook .workbook-grid .working-cell {
+  background: #171d33;
+}
+.marks-bound-workbook .workbook-grid .working-cell.selected {
+  background: #253955;
+}
