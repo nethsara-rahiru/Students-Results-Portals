@@ -1,3 +1,4 @@
+import { loadingScreen } from "./loading.js";
 import { worksheetModel, automaticPaperColumns } from "./worksheet-model.js";
 import { api, notify } from "./client.js";
 import { mountWorkbook } from "./workbook.js";
@@ -25,6 +26,12 @@ export async function mountMarksWorkbook(
       return false;
     }
     loading = true;
+    if (!controller)
+      host.innerHTML = loadingScreen({
+        title: "Opening your worksheet",
+        description: "Preparing students, papers and saved calculations.",
+        compact: true,
+      });
     try {
       const scope = next || "all",
         space = await api("/admin/worksheet-space/" + scope);

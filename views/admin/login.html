@@ -10,6 +10,7 @@
     />
     <title>Teacher Login · Exam Result Portal</title>
     <link rel="stylesheet" href="/style.css" />
+    <link rel="stylesheet" href="/loading.css" />
     <link rel="stylesheet" href="/admin.css" />
     <link rel="stylesheet" href="/admin-access.css" />
   </head>
@@ -17,7 +18,38 @@
     <div class="ambient-background" aria-hidden="true">
       <span></span><span></span>
     </div>
-    <div id="app" aria-live="off"><p>Loading Exam Result Portal…</p></div>
+    <div id="app" aria-live="off">
+      <section
+        class="portal-loader"
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+        aria-label="Preparing your workspace"
+      >
+        <div class="portal-loader-content">
+          <div class="portal-loader-art" aria-hidden="true">
+            <svg viewBox="0 0 64 72" fill="none">
+              <path class="loader-paper" d="M13 5h25l13 13v48H13V5Z" />
+              <path class="loader-fold" d="M38 5v14h13" />
+              <path class="loader-line" d="M22 31h20M22 40h14M22 49h17" />
+              <path class="loader-ascent" d="m34 57 9-9m-9 0h9v9" /></svg
+            ><span class="loader-spark"></span>
+          </div>
+          <p class="portal-loader-brand">Exam Result Portal</p>
+          <p class="portal-loader-kicker">TEACHER WORKSPACE</p>
+          <p class="portal-loader-title">Preparing your workspace</p>
+          <p class="portal-loader-description">
+            Opening your tools, students and results.
+          </p>
+          <div class="portal-loader-track" aria-hidden="true">
+            <span></span>
+          </div>
+          <span class="portal-loader-caption" aria-hidden="true"
+            >ONE MOMENT</span
+          >
+        </div>
+      </section>
+    </div>
     <main
       id="admin-desktop-notice"
       class="admin-desktop-notice"
