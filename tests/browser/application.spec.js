@@ -1793,6 +1793,18 @@ for (const viewport of [
     );
     const frames = await page.evaluate(() => window.impactFrames);
     const impact = frames.find((f) => f.done);
+    const speed = (samples) =>
+      (samples[0].remaining - samples.at(-1).remaining) /
+      (samples.at(-1).time - samples[0].time);
+    const early = frames.filter(
+      (f) => f.time - frames[0].time >= 100 && f.time - frames[0].time <= 500,
+    );
+    const late = frames.filter(
+      (f) => impact.time - f.time >= 300 && impact.time - f.time <= 700,
+    );
+    expect(early.length).toBeGreaterThan(2);
+    expect(late.length).toBeGreaterThan(2);
+    expect(speed(early)).toBeGreaterThan(speed(late) * 2.5);
     const before = frames.filter(
       (f) => impact.time - f.time >= 180 && impact.time - f.time <= 230,
     );

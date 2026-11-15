@@ -63,3 +63,19 @@ test("reels keep visible motion until impact instead of easing into an idle tail
   const lastStep = reelProgress(1) - reelProgress(0.99);
   assert.ok(firstStep > lastStep); // It still decelerates.
 });
+
+test("spinner launches fast and slows substantially over the final roll", async () => {
+  const { reelProgress } = await import("../public/reveal.js");
+  const opening = reelProgress(0.1) - reelProgress(0);
+  const middle = reelProgress(0.6) - reelProgress(0.5);
+  const landing = reelProgress(1) - reelProgress(0.9);
+  assert.ok(
+    opening > 0.25,
+    "the opening tenth covers over a quarter of the reel",
+  );
+  assert.ok(
+    opening > 6 * landing,
+    "the opening is over six times faster than the landing",
+  );
+  assert.ok(opening > middle && middle > landing);
+});

@@ -74,3 +74,8 @@ Login-rate tests verify that successful teacher sign-ins do not consume the fail
 ## Visible impact rendering
 
 34 Node tests and 35 browser tests cover this correction. The new desktop (1280px) and mobile (390px) checks sample rendered reel positions and glass opacity/scale every animation frame. They require visible reel travel shortly before the result, a sub-100ms gap from the last reel frame to the first visible impact, a clearly visible initial bubble, and compact one-digit strips at completion. Earlier callback-only timing checks remain. These frame checks caught a roughly 780ms rendering gap that callback timestamps did not show. A unit test also verifies that the deceleration retains visible travel until impact. Existing replay, reduced motion, Skip, decimals, ordering and admin regressions remain included.
+
+
+## Fast opening and slower landing
+
+35 Node tests and 35 browser tests cover the stronger spinner deceleration. A unit check compares opening, middle and final travel and verifies the opening tenth is over six times faster than the final tenth. Desktop and mobile frame checks compare rendered early/late reel speeds while retaining the exact-score, immediate impact, compact-strip and fade-out assertions. Skip, reduced motion, replay and all existing regressions remain covered.
