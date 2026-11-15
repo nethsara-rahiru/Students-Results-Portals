@@ -2048,7 +2048,10 @@ test("non-local HTTP loads student and teacher assets without HTTPS upgrades", a
       page.getByRole("button", { name: /Single Student ·/ }),
     ).toBeVisible();
     await signIn(page, "/admin/login");
-    await expect(page.locator("#flexible-workspace")).toBeVisible();
+    await expect(page.locator(".workbook-grid")).toBeVisible();
+    await expect(page.locator(".workbook-status")).toHaveText(
+      "All changes saved",
+    );
     expect(loaded.has("/admin.js")).toBe(true);
     expect(loaded.has("/admin.css")).toBe(true);
     const cookie = (await context.cookies()).find(
@@ -2069,7 +2072,189 @@ test("non-local HTTP loads student and teacher assets without HTTPS upgrades", a
       ),
     ).toEqual([]);
   } finally {
+    await context.unrouteAll({ behavior: "wait" });
     await context.close();
     await browser.close();
   }
+});
+
+test("student loading screen is themed, responsive, reduced-motion friendly and leaves on readiness", async ({
+  page,
+}) => {
+  let releaseSession, releaseLookup, releaseResults;
+  const sessionReady = new Promise((resolve) => (releaseSession = resolve));
+  const lookupReady = new Promise((resolve) => (releaseLookup = resolve));
+  const resultsReady = new Promise((resolve) => (releaseResults = resolve));
+  let resultCalls = 0;
+  await page.route("**/api/results/*", async (route) => {
+    await resultsReady;
+    if (++resultCalls === 1)
+      await route.fulfill({ json: { student: "Single Student", papers: [] } });
+    else await route.continue();
+  });
+  await page.route("**/api/session", async (route) => {
+    await sessionReady;
+    await route.continue();
+  });
+  await page.route("**/api/lookup", async (route) => {
+    await lookupReady;
+    await route.continue();
+  });
+  try {
+    await page.goto("/", { waitUntil: "commit" });
+    const loader = page.getByRole("status", {
+      name: "Getting things ready",
+      exact: true,
+    });
+    await expect(loader).toBeVisible();
+    await expect(loader).toContainText("Exam Result Portal");
+    await expect(loader).toHaveAttribute("aria-live", "polite");
+    await page.screenshot({ path: "docs/screenshots/loading-student.png" });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await expect(page.locator(".portal-loader-track > span")).toHaveCSS(
+      "animation-name",
+      "none",
+    );
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+    await page.screenshot({ path: "docs/screenshots/loading-mobile.png" });
+    releaseSession();
+    await expect(page.getByLabel("Full name", { exact: true })).toBeVisible();
+    await expect(loader).toHaveCount(0);
+    await page.getByLabel("Full name", { exact: true }).fill("Single Student");
+    await page.getByLabel("Full name", { exact: true }).press("Enter");
+    await expect(page.locator(".inline-loading")).toContainText(
+      "Finding your profile",
+    );
+    await expect(page.locator("#suggest")).toHaveAttribute("aria-busy", "true");
+    releaseLookup();
+    await expect(
+      page.getByRole("button", { name: /Single Student ·/ }),
+    ).toBeVisible();
+    await expect(page.locator(".inline-loading")).toHaveCount(0);
+    await page.getByRole("button", { name: /Single Student ·/ }).click();
+    await page.getByRole("button", { name: /Discover my results/ }).click();
+    await expect(page.locator(".inline-loading")).toContainText(
+      "Loading your results",
+    );
+    releaseResults();
+    await expect(
+      page.getByText(
+        "Your teacher has not published any results for you yet.",
+        { exact: true },
+      ),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: /Discover my results/ }),
+    ).toBeEnabled();
+    await expect(page.locator(".inline-loading")).toHaveCount(0);
+    await page.getByRole("button", { name: /Discover my results/ }).click();
+    await expect(
+      page.getByRole("button", { name: /Click to reveal/ }),
+    ).toBeVisible();
+  } finally {
+    releaseSession();
+    releaseLookup();
+    releaseResults();
+  }
+});
+
+test("teacher startup, sign-in, worksheet and history show styled loading states until data arrives", async ({
+  page,
+}) => {
+  let releaseSession, releaseLogin, releaseWorksheet, releaseAudit;
+  const pendingSession = new Promise((resolve) => (releaseSession = resolve));
+  const pendingLogin = new Promise((resolve) => (releaseLogin = resolve));
+  const pendingWorksheet = new Promise(
+    (resolve) => (releaseWorksheet = resolve),
+  );
+  const pendingAudit = new Promise((resolve) => (releaseAudit = resolve));
+  await page.route("**/api/session", async (route) => {
+    await pendingSession;
+    await route.continue();
+  });
+  await page.route("**/api/login", async (route) => {
+    await pendingLogin;
+    await route.continue();
+  });
+  await page.route("**/api/admin/worksheet-space/*", async (route) => {
+    await pendingWorksheet;
+    await route.continue();
+  });
+  await page.route("**/api/admin/audit", async (route) => {
+    await pendingAudit;
+    await route.continue();
+  });
+  try {
+    await page.goto("/admin/login", { waitUntil: "commit" });
+    const startup = page.getByRole("status", {
+      name: "Preparing your workspace",
+      exact: true,
+    });
+    await expect(startup).toBeVisible();
+    await expect(startup).toContainText("TEACHER WORKSPACE");
+    await page.screenshot({ path: "docs/screenshots/loading-admin.png" });
+    releaseSession();
+    await page.getByLabel("Username", { exact: true }).fill("teacher");
+    await page.getByLabel("Password", { exact: true }).fill("browser-password");
+    await page.getByRole("button", { name: /Sign in/ }).click();
+    await expect(
+      page.getByRole("button", { name: "Signing in…", exact: true }),
+    ).toBeDisabled();
+    await expect(page.locator("button .loading-dots")).toBeVisible();
+    releaseLogin();
+    const worksheet = page.getByRole("status", {
+      name: "Opening your worksheet",
+      exact: true,
+    });
+    await expect(worksheet).toBeVisible();
+    await page.screenshot({ path: "docs/screenshots/loading-worksheet.png" });
+    releaseWorksheet();
+    await expect(page.locator(".workbook-grid")).toBeVisible();
+    await expect(page.locator(".portal-loader")).toHaveCount(0);
+    await page.getByRole("link", { name: "History", exact: true }).click();
+    const history = page.getByRole("status", {
+      name: "Loading change history",
+      exact: true,
+    });
+    await expect(history).toBeVisible();
+    await page.screenshot({ path: "docs/screenshots/loading-history.png" });
+    releaseAudit();
+    await expect(page.getByLabel("Search history")).toBeVisible();
+    await expect(history).toHaveCount(0);
+  } finally {
+    releaseSession();
+    releaseLogin();
+    releaseWorksheet();
+    releaseAudit();
+  }
+});
+
+test("startup errors replace the loader and teacher retry recovers", async ({
+  page,
+}) => {
+  await page.route("**/api/session", (route) =>
+    route.fulfill({
+      status: 503,
+      json: { error: "Service temporarily unavailable" },
+    }),
+  );
+  await page.goto("/");
+  await expect(
+    page.getByRole("heading", { name: "We couldn’t connect." }),
+  ).toBeVisible();
+  await expect(page.locator(".portal-loader")).toHaveCount(0);
+  await page.goto("/admin/login");
+  await expect(
+    page.getByRole("heading", { name: "Unable to load this page." }),
+  ).toBeVisible();
+  await expect(page.locator(".portal-loader")).toHaveCount(0);
+  await page.unroute("**/api/session");
+  await page.getByRole("button", { name: "Try again", exact: true }).click();
+  await expect(page.getByLabel("Username", { exact: true })).toBeVisible();
+  await expect(page.locator(".portal-loader")).toHaveCount(0);
 });

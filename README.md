@@ -142,7 +142,7 @@ npm audit --omit=dev
 
 Tests launch an isolated real MongoDB process using `mongodb-memory-server`; the first run downloads MongoDB. Browser tests launch their own synthetic-data servers at ports 3100 (name access) and 3101 (access codes) and do not touch your configured database. Chromium may need OS libraries (`npx playwright install --with-deps chromium` on supported systems).
 
-Verified in this delivery: **42 Node tests and 40 Chromium end-to-end tests**, including exact/similar lookup, duplicates, admin auth, CSRF, CRUD, invalid/valid bulk marks, zero/absence/blanks, publishing/unpublishing, ordering, access codes, class boundaries, persistence, rate limits, spinner completion, single/multiple reveals, final celebration, reduced motion, keyboard interactions and mobile layouts. Production dependency audit: **0 reported vulnerabilities** at delivery. See [test report](docs/testing.md).
+Verified in this delivery: **42 Node tests and 43 Chromium end-to-end tests**, including exact/similar lookup, duplicates, admin auth, CSRF, CRUD, invalid/valid bulk marks, zero/absence/blanks, publishing/unpublishing, ordering, access codes, class boundaries, persistence, rate limits, spinner completion, single/multiple reveals, final celebration, reduced motion, keyboard interactions and mobile layouts. Production dependency audit: **0 reported vulnerabilities** at delivery. See [test report](docs/testing.md).
 
 Screenshots use synthetic students: [welcome](docs/screenshots/welcome.png), [teacher spreadsheet](docs/screenshots/admin.png), [final reveal](docs/screenshots/final-result.png), [mobile](docs/screenshots/mobile.png).
 
@@ -228,3 +228,8 @@ The glass blast and number pop start in the same rendering frame that the spinne
 At impact, hidden reel digits are removed before the pop and glass textures are prepared during the roll, preventing a rendering pause between the visible spinner stop and blast. The spinner launches quickly and keeps braking throughout the final second, keeping visible movement up to impact; the main bubble is visible from its first frame.
 
 Recorded preview: [spinner braking into the result](docs/recordings/spinner-braking.webm).
+
+
+### Styled loading states
+
+Student and teacher startup screens use the portal’s cyan/purple theme, local typography, a paper emblem and an indeterminate progress bar. Compact loaders cover worksheet/history fetching; lookup, result loading, sign-in and saves use inline activity bars. They reflect real pending requests and clear immediately when ready, without artificial delays or invented percentages. Reduced-motion preferences keep the indicators static, and existing error/retry states replace the loader on failure. [Student preview](docs/screenshots/loading-student.png) · [Teacher preview](docs/screenshots/loading-admin.png) · [Mobile preview](docs/screenshots/loading-mobile.png).

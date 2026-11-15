@@ -1,3 +1,4 @@
+import { loadingScreen, inlineLoading } from "./loading.js";
 import { installAdminDesktopGuard } from "./admin-access.js";
 import { mountMarksWorkbook } from "./marks-workbook.js";
 import { api, app, esc, btn, shell, notify } from "./client.js";
@@ -53,7 +54,7 @@ function login() {
     e.preventDefault();
     const submit = e.target.querySelector("button");
     submit.disabled = true;
-    submit.textContent = "Signing in…";
+    submit.innerHTML = inlineLoading("Signing in…");
     document.querySelector("#error").textContent = "";
     try {
       await api("/login", {
@@ -94,7 +95,7 @@ function dialog(title, fields, onSubmit, options = {}) {
     e.preventDefault();
     const submit = e.target.querySelector('button:not([type="button"])');
     submit.disabled = true;
-    submit.textContent = "Saving…";
+    submit.innerHTML = inlineLoading("Saving…");
     try {
       if (
         (sheet?.isBusy() || sheet?.hasUnsavedChanges()) &&
@@ -336,8 +337,7 @@ async function admin() {
         area.querySelector(".management-list").append(row);
       }
     } else {
-      area.innerHTML =
-        '<h2>Change history</h2><p class="muted">Latest 200 events. Marks include the previous and new value.</p><div id="audit" class="audit-list">Loading…</div>';
+      area.innerHTML = `<h2>Change history</h2><p class="muted">Latest 200 events. Marks include the previous and new value.</p><div id="audit" class="audit-list">${loadingScreen({ title: "Loading change history", description: "Gathering the latest updates.", compact: true })}</div>`;
       try {
         const logs = await api("/admin/audit");
         const search = document.createElement("label");

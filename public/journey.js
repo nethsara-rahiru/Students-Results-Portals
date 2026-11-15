@@ -1,3 +1,4 @@
+import { inlineLoading } from "./loading.js";
 import { api, esc } from "./client.js";
 import { animateScore, motivation } from "./reveal.js";
 import { ScoreEffects } from "./score-effects.js";
@@ -434,7 +435,7 @@ export class StudentJourney {
     if (!this.input.reportValidity()) return;
     this.lock(true);
     const target = this.node("suggest");
-    target.textContent = "Finding your profile…";
+    target.innerHTML = inlineLoading("Finding your profile…");
     target.setAttribute("aria-busy", "true");
     try {
       const result = await api("/lookup", { name });
@@ -531,6 +532,9 @@ export class StudentJourney {
   async discover() {
     if (this.busy) return;
     this.lock(true);
+    const action = this.node("primary-action"),
+      previousLabel = action.innerHTML;
+    action.innerHTML = inlineLoading("Loading your results…");
     try {
       this.data = await api("/results/" + this.profile._id);
       if (!this.data.papers.length) {
@@ -569,6 +573,11 @@ export class StudentJourney {
         this.actions(() => this.identify(), "Find my profile");
       }
       this.layout();
+    } finally {
+      if (action.querySelector(".inline-loading")) {
+        action.innerHTML = previousLabel;
+        this.layout();
+      }
     }
   }
   progress(index) {
