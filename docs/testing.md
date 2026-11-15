@@ -79,3 +79,8 @@ Login-rate tests verify that successful teacher sign-ins do not consume the fail
 ## Fast opening and slower landing
 
 35 Node tests and 35 browser tests cover the stronger spinner deceleration. A unit check compares opening, middle and final travel and verifies the opening tenth is over six times faster than the final tenth. Desktop and mobile frame checks compare rendered early/late reel speeds while retaining the exact-score, immediate impact, compact-strip and fade-out assertions. Skip, reduced motion, replay and all existing regressions remain covered.
+
+
+## Continuous braking through the final second
+
+36 Node tests and 35 browser tests cover the final-roll correction. A new unit check requires the final fifth to be less than half as fast as the preceding fifth and checks decreasing speed throughout braking. Desktop/mobile frame checks now compare two windows within the final second, in addition to opening-versus-ending speed, exact score, visible motion until landing, immediate impact, and complete bubble fade-out. A recorded desktop preview uses synthetic results.

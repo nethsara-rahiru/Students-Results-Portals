@@ -55,10 +55,10 @@ test("reels keep visible motion until impact instead of easing into an idle tail
   assert.equal(reelProgress(2), 1);
   for (let i = 1; i <= 100; i++)
     assert.ok(reelProgress(i / 100) > reelProgress((i - 1) / 100));
-  // Even the shortest reel still has a whole digit to travel 200ms before
-  // landing on a final paper, rather than already displaying its final digit.
-  assert.ok(40 * (1 - reelProgress(1 - 200 / 2900)) > 1);
-  assert.ok(40 * (1 - reelProgress(1 - 50 / 2900)) > 0.24);
+  // Slow visible movement remains through landing without an idle wait.
+  const beforeLanding = 40 * (1 - reelProgress(1 - 50 / 2900));
+  assert.ok(beforeLanding > 0.02 && beforeLanding < 0.08);
+  assert.ok(40 * (1 - reelProgress(1 - 200 / 2900)) > 0.2);
   const firstStep = reelProgress(0.01) - reelProgress(0);
   const lastStep = reelProgress(1) - reelProgress(0.99);
   assert.ok(firstStep > lastStep); // It still decelerates.
@@ -70,12 +70,31 @@ test("spinner launches fast and slows substantially over the final roll", async 
   const middle = reelProgress(0.6) - reelProgress(0.5);
   const landing = reelProgress(1) - reelProgress(0.9);
   assert.ok(
-    opening > 0.25,
-    "the opening tenth covers over a quarter of the reel",
+    opening > 0.18,
+    "the opening tenth covers enough reel travel for a fast launch",
   );
   assert.ok(
     opening > 6 * landing,
     "the opening is over six times faster than the landing",
   );
   assert.ok(opening > middle && middle > landing);
+});
+
+test("the last portion keeps braking instead of flattening to constant speed", async () => {
+  const { reelProgress } = await import("../public/reveal.js");
+  const lateMiddle = reelProgress(0.8) - reelProgress(0.6);
+  const finalRoll = reelProgress(1) - reelProgress(0.8);
+  assert.ok(
+    lateMiddle > 2 * finalRoll,
+    "the final fifth is visibly slower than the preceding fifth",
+  );
+  let previous = Infinity;
+  for (let i = 60; i < 100; i++) {
+    const speed = reelProgress((i + 1) / 100) - reelProgress(i / 100);
+    assert.ok(
+      speed < previous,
+      "speed must keep decreasing throughout braking",
+    );
+    previous = speed;
+  }
 });

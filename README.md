@@ -202,4 +202,6 @@ During the spinner, a blue-purple atmosphere slowly develops into the score-rang
 
 The glass blast and number pop start in the same rendering frame that the spinner lands on the actual mark. The reel engine shares its completion clock with the effects, avoiding a separate post-spin delay; only the decorative glass echo is delayed.
 
-At impact, hidden reel digits are removed before the pop and glass textures are prepared during the roll, preventing a rendering pause between the visible spinner stop and blast. The spinner launches quickly and decelerates into a slower final roll, keeping visible movement up to impact; the main bubble is visible from its first frame.
+At impact, hidden reel digits are removed before the pop and glass textures are prepared during the roll, preventing a rendering pause between the visible spinner stop and blast. The spinner launches quickly and keeps braking throughout the final second, keeping visible movement up to impact; the main bubble is visible from its first frame.
+
+Recorded preview: [spinner braking into the result](docs/recordings/spinner-braking.webm).
