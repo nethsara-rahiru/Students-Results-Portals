@@ -89,3 +89,10 @@ Login-rate tests verify that successful teacher sign-ins do not consume the fail
 ## Exam Result Portal and desktop-only administration
 
 41 Node tests and 39 browser tests cover this update. Device policy tests cover the 1024px boundary, mobile identities/client hints, desktop-mode phones, desktop-mode iPads and mouse-equipped touchscreen laptops. API checks verify mobile/viewport rejection for every admin entry path, sign-in and private records even with an authenticated session, no leaked student records, no-store responses, desktop support, and continued student-page access. Browser checks cover restriction before private requests, narrow-window recovery, all admin page types on phone and desktop-mode emulations, modal closure and inert content on resize, preserved directory state, rejected private calls, full renamed branding/titles and usable mobile student reveals. Physical-device detection is best-effort; authentication and CSRF remain mandatory. Screenshots use synthetic records.
+
+
+## HTTP development and HTTPS production headers
+
+42 Node tests and 40 browser tests cover this update. Integration checks create applications using both actual NODE_ENV values, inspect HTML/admin/JS/CSS/font responses, verify development omits HTTPS upgrading, HSTS and origin-isolation headers while retaining the other default CSP/security restrictions, and verify production retains those headers and Secure/HttpOnly/SameSite session cookies behind the trusted HTTPS proxy. Plain HTTP production does not issue the Secure session cookie.
+
+A Chromium check uses a non-local, untrustworthy HTTP browser origin forwarded to the isolated Express fixture, without disabling browser security or ignoring certificate errors. It verifies real student/admin module, stylesheet and font responses, student lookup, teacher login/session persistence, zero HTTPS-upgraded requests, no failed requests and no SSL/ignored-COOP errors. Existing admin/device, worksheet, publishing, animation and accessibility regressions remain included. No Oracle VPS or PM2 process is modified by these tests.

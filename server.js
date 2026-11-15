@@ -189,7 +189,18 @@ export async function createApp({ db, client, config = {} }) {
   );
   if (production)
     app.set("trust proxy", Number(process.env.TRUST_PROXY_HOPS || 1));
-  app.use(helmet());
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        // Keep Helmet's other default directives in both environments.
+        directives: { "upgrade-insecure-requests": production ? [] : null },
+      },
+      strictTransportSecurity: production,
+      // Untrusted plain-HTTP origins cannot use these isolation headers.
+      crossOriginOpenerPolicy: production,
+      originAgentCluster: production,
+    }),
+  );
   app.use((req, res, next) => {
     const path = req.path.toLowerCase();
     const adminRequest =

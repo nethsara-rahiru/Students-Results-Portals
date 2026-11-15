@@ -977,3 +977,72 @@ test("working average columns become idempotent, publishable papers with validat
     false,
   );
 });
+
+test("Helmet supports HTTP development and retains HTTPS production protections", async () => {
+  const previous = process.env.NODE_ENV;
+  try {
+    for (const mode of ["development", "production"]) {
+      process.env.NODE_ENV = mode;
+      const target = await createApp({
+        db,
+        client,
+        config: { secret: "http-mode-test-secret-".repeat(3) },
+      });
+      const production = mode === "production";
+      for (const path of [
+        "/",
+        "/admin/login",
+        "/app.js",
+        "/style.css",
+        "/assets/manrope-latin-variable.woff2",
+      ]) {
+        const response = await request(target).get(path);
+        assert.equal(response.status, 200, `${mode} ${path}`);
+        const headers = response.headers,
+          csp = headers["content-security-policy"];
+        assert.match(csp, /default-src 'self'/);
+        assert.match(csp, /script-src 'self'/);
+        assert.match(csp, /object-src 'none'/);
+        assert.match(csp, /base-uri 'self'/);
+        assert.equal(
+          /(?:^|;)upgrade-insecure-requests(?:;|$)/.test(csp),
+          production,
+          mode,
+        );
+        assert.equal(headers["x-content-type-options"], "nosniff");
+        assert.equal(headers["x-frame-options"], "SAMEORIGIN");
+        assert.equal(headers["referrer-policy"], "no-referrer");
+        assert.equal(headers["cross-origin-resource-policy"], "same-origin");
+        if (production) {
+          assert.match(
+            headers["strict-transport-security"],
+            /max-age=31536000; includeSubDomains/,
+          );
+          assert.equal(headers["cross-origin-opener-policy"], "same-origin");
+          assert.equal(headers["origin-agent-cluster"], "?1");
+        } else {
+          assert.equal(headers["strict-transport-security"], undefined);
+          assert.equal(headers["cross-origin-opener-policy"], undefined);
+          assert.equal(headers["origin-agent-cluster"], undefined);
+        }
+      }
+      const session = await request(target)
+        .get("/api/session")
+        .set("X-Forwarded-Proto", "https");
+      const cookie = session.headers["set-cookie"].find((value) =>
+        value.startsWith("levelup.sid="),
+      );
+      assert.match(cookie, /HttpOnly/i);
+      assert.match(cookie, /SameSite=Strict/i);
+      assert.equal(/; Secure(?:;|$)/.test(cookie), production);
+      if (production)
+        assert.equal(
+          (await request(target).get("/api/session")).headers["set-cookie"],
+          undefined,
+        );
+    }
+  } finally {
+    if (previous === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = previous;
+  }
+});
