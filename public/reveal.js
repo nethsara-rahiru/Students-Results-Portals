@@ -1,8 +1,8 @@
-// Retain a visible landing speed instead of a nearly stationary easing tail.
-// Deceleration is smooth; the remaining motion ends at the impact frame.
+// Launch quickly, then ease through a slower final roll. The small linear
+// component keeps the last digit visibly moving until the impact frame.
 export function reelProgress(progress) {
   const p = Math.max(0, Math.min(1, progress));
-  return 0.65 * (1 - (1 - p) ** 2) + 0.35 * p;
+  return 0.63 * (1 - (1 - p) ** 4) + 0.37 * p;
 }
 
 export function animateScore(
