@@ -400,6 +400,63 @@ test("admin documents are separate protected pages with safe login redirects", a
     404,
   );
 });
+test("admin pages, sign-in and private APIs reject mobile identity and viewport hints", async () => {
+  const cases = [
+    {
+      "User-Agent":
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) Mobile",
+    },
+    { "User-Agent": "Mozilla/5.0 (Linux; Android 14) Chrome/130.0" },
+    {
+      "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) Chrome/130.0",
+      "Sec-CH-UA-Mobile": "?1",
+    },
+    { "Sec-CH-UA-Platform": '"Android"' },
+    { "X-Admin-Viewport-Width": "390" },
+    { "X-Admin-Device": "mobile" },
+  ];
+  for (const headers of cases) {
+    for (const path of [
+      "/admin",
+      "/admin/login",
+      "/admin/marks",
+      "/ADMIN/students",
+    ]) {
+      const denied = await admin.get(path).set(headers);
+      assert.equal(denied.status, 403, path);
+      assert.match(denied.text, /Desktop access required/);
+      assert.doesNotMatch(denied.text, /src="\/admin.js"|id="login"/);
+      assert.equal(denied.headers["cache-control"], "no-store");
+    }
+    const denied = await admin.get("/api/admin/data").set(headers);
+    assert.equal(denied.status, 403);
+    assert.equal(denied.body.code, "DESKTOP_REQUIRED");
+    assert.equal(denied.body.students, undefined);
+    assert.equal(
+      (
+        await publicAgent
+          .post("/api/login")
+          .set(headers)
+          .send({ username: "teacher", password: "correct-password" })
+      ).status,
+      403,
+    );
+    assert.equal((await publicAgent.get("/").set(headers)).status, 200);
+  }
+  assert.equal(
+    (
+      await admin
+        .get("/api/admin/data")
+        .set("Sec-CH-UA-Mobile", "?0")
+        .set("X-Admin-Viewport-Width", "1024")
+    ).status,
+    200,
+  );
+  assert.match(
+    (await publicAgent.get("/admin/login")).text,
+    /Exam Result Portal/,
+  );
+});
 test("session persists in Mongo and logout revokes admin access", async () => {
   assert.ok(
     await db.collection("sessions").findOne({ session: { $regex: "teacher" } }),

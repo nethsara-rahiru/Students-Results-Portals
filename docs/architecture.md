@@ -67,3 +67,8 @@ The completed score compacts each 51-line digit strip to its one actual digit be
 
 
 Glass uses cached 512px transparent textures (blue and gold) scaled by the measured viewport radius, rather than rasterizing large live gradients and blur filters at impact. A faint prewarm state keeps these compositor resources ready during the roll; it is cleared by the impact state so no bubble remains after the blast. Digit filters are removed, and impact animations explicitly share the current document-timeline start time.
+
+
+### Desktop-only teacher workspace
+
+`public/admin-access.js` shares mobile-identity rules between Express and the browser. Express rejects recognized mobile admin documents/sign-in/private API requests before session or record handling and returns a static, accessible notice. Client checks also use the viewport, touch/pointer and screen/platform signals to catch ordinary desktop-mode phones and tablets. CSS supplies a narrow-screen fallback before JavaScript; the browser guard runs before session/data loading, makes an open workspace inert on resize and closes dialogs. Client API calls re-check compatibility before sending private requests. Detection can be spoofed and does not replace session authorization or CSRF. Legacy persistence/deployment identifiers are preserved behind the renamed Exam Result Portal UI.

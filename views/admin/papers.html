@@ -6,17 +6,39 @@
     <meta name="theme-color" content="#101322" />
     <meta
       name="description"
-      content="Discover your progress with LevelUp Results."
+      content="Discover your progress with Exam Result Portal."
     />
-    <title>Papers · LevelUp Results</title>
+    <title>Papers · Exam Result Portal</title>
     <link rel="stylesheet" href="/style.css" />
     <link rel="stylesheet" href="/admin.css" />
+    <link rel="stylesheet" href="/admin-access.css" />
   </head>
   <body data-admin-page="papers">
     <div class="ambient-background" aria-hidden="true">
       <span></span><span></span>
     </div>
-    <div id="app" aria-live="off"><p>Loading LevelUp Results…</p></div>
+    <div id="app" aria-live="off"><p>Loading Exam Result Portal…</p></div>
+    <main
+      id="admin-desktop-notice"
+      class="admin-desktop-notice"
+      aria-labelledby="desktop-required-title"
+    >
+      <div class="desktop-notice-content">
+        <a class="desktop-notice-brand" href="/">Exam Result Portal</a
+        ><span class="eyebrow">TEACHER WORKSPACE</span>
+        <h1 id="desktop-required-title" tabindex="-1">
+          Desktop access required
+        </h1>
+        <p>
+          Use a desktop or laptop to access the teacher workspace. The workspace
+          needs a window at least 1024 pixels wide.
+        </p>
+        <p>
+          Phones and tablets remain unsupported when desktop mode is enabled.
+        </p>
+        <a class="desktop-notice-return" href="/">View student results</a>
+      </div>
+    </main>
     <script type="module" src="/admin.js"></script>
   </body>
 </html>

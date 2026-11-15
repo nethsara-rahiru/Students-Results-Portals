@@ -17,7 +17,7 @@ export class StudentJourney {
     this.data = null;
     this.index = 0;
     host.innerHTML = `<main id="student-journey" class="student-journey" data-state="identify" aria-labelledby="journey-title">
-      <div class="journey-top" hidden><a href="/" class="journey-brand" aria-label="LevelUp Results home"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 18 18 5M6 5h12v12"/></svg>LevelUp <span>Results</span></a><span id="journey-step"></span><button id="skip-transition" class="journey-link" hidden>Skip transition</button></div>
+      <div class="journey-top" hidden><a href="/" class="journey-brand" aria-label="Exam Result Portal home"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 18 18 5M6 5h12v12"/></svg>Exam Result Portal</a><span id="journey-step"></span><button id="skip-transition" class="journey-link" hidden>Skip transition</button></div>
       <div class="journey-world" aria-hidden="true"><svg viewBox="0 0 1200 800" preserveAspectRatio="xMidYMid slice"><defs><linearGradient id="world-line"><stop stop-color="#159ed4" stop-opacity="0"/><stop offset=".5" stop-color="#91b8ee" stop-opacity=".25"/><stop offset="1" stop-color="#9d59eb" stop-opacity="0"/></linearGradient></defs><g fill="none" stroke="url(#world-line)" stroke-width=".6"><path d="M0 640h1200M0 700h1200M0 780h1200M600 500 0 800M600 500 200 800M600 500 400 800M600 500 600 800M600 500 800 800M600 500 1000 800M600 500 1200 800"/><path d="M24 120h130m-130 0v130m1152-130h-130m130 0v130M24 680v-80m0 80h80m1072 0h-80m80 0v-80"/></g></svg></div>
       <p id="journey-kicker" class="journey-kicker" hidden></p>
       <h1 id="journey-title" class="journey-title"><span id="journey-heading">What’s your full name?</span><span id="journey-name" hidden></span></h1>
@@ -29,7 +29,7 @@ export class StudentJourney {
       <div id="actions" class="journey-actions" hidden><button id="primary-action"></button><button id="secondary-action" class="secondary" hidden></button><button id="skip-score" class="journey-link" hidden>Skip animation</button></div>
       <section id="journey-summary" class="journey-summary" aria-label="All published results" hidden><div id="result-list"></div></section>
       <ol id="journey-progress" class="journey-progress" aria-label="Paper progress" hidden></ol>
-      <div class="journey-bottom" hidden><span id="journey-phase">A LITTLE EFFORT. A NEW LEVEL.</span><span>LEVELUP RESULTS <i></i></span></div>
+      <div class="journey-bottom" hidden><span id="journey-phase">A LITTLE EFFORT. A NEW LEVEL.</span><span>EXAM RESULT PORTAL <i></i></span></div>
     </main>`;
     this.root = host.querySelector("main");
     const node = (id) => host.querySelector("#" + id);

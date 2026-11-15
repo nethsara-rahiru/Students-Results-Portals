@@ -1,4 +1,9 @@
 import "dotenv/config";
+import {
+  mobileIdentity,
+  ADMIN_MIN_WIDTH,
+  DESKTOP_MESSAGE,
+} from "./public/admin-access.js";
 import { worksheetModel } from "./public/worksheet-model.js";
 import { calculator, columnName } from "./public/formulas.js";
 import { bindingsFor, rebaseFormula } from "./public/worksheet-references.js";
@@ -185,6 +190,42 @@ export async function createApp({ db, client, config = {} }) {
   if (production)
     app.set("trust proxy", Number(process.env.TRUST_PROXY_HOPS || 1));
   app.use(helmet());
+  app.use((req, res, next) => {
+    const path = req.path.toLowerCase();
+    const adminRequest =
+      /^\/admin(?:\/|$)/.test(path) ||
+      /^\/api\/admin(?:\/|$)/.test(path) ||
+      /^\/api\/login\/?$/.test(path);
+    if (!adminRequest) return next();
+    res.set("Cache-Control", "no-store");
+    res.set("Accept-CH", "Sec-CH-UA-Mobile, Sec-CH-UA-Platform");
+    res
+      .vary("User-Agent")
+      .vary("Sec-CH-UA-Mobile")
+      .vary("Sec-CH-UA-Platform")
+      .vary("X-Admin-Device")
+      .vary("X-Admin-Viewport-Width");
+    const width = Number(req.get("X-Admin-Viewport-Width"));
+    const blocked =
+      mobileIdentity({
+        userAgent: req.get("User-Agent"),
+        platform: req.get("Sec-CH-UA-Platform"),
+        mobileHint: req.get("Sec-CH-UA-Mobile"),
+      }) ||
+      req.get("X-Admin-Device") === "mobile" ||
+      (width > 0 && width < ADMIN_MIN_WIDTH);
+    if (!blocked) return next();
+    if (path.startsWith("/api/"))
+      return res
+        .status(403)
+        .json({ error: DESKTOP_MESSAGE, code: "DESKTOP_REQUIRED" });
+    return res
+      .status(403)
+      .sendFile(
+        new URL("./views/admin/desktop-required.html", import.meta.url)
+          .pathname,
+      );
+  });
   app.use(express.json({ limit: "512kb" }));
   const sessionStore = MongoStore.create({
     client,
@@ -1178,7 +1219,9 @@ if (
     process.env.PORT || 3000,
     process.env.HOST || "127.0.0.1",
     () =>
-      console.log("LevelUp Results listening on " + (process.env.PORT || 3000)),
+      console.log(
+        "Exam Result Portal listening on " + (process.env.PORT || 3000),
+      ),
   );
   for (const signal of ["SIGINT", "SIGTERM"])
     process.on(signal, () =>

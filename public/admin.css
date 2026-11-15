@@ -1221,3 +1221,13 @@ body[data-admin-page="marks"] .workspace {
     max-height: 160px;
   }
 }
+/* Keep the full product name readable in the existing sidebar width. */
+.admin-brand {
+  font-size: 19px;
+  letter-spacing: -0.6px;
+  align-items: flex-start;
+}
+.admin-brand > span:last-child {
+  min-width: 0;
+  line-height: 1.25;
+}
