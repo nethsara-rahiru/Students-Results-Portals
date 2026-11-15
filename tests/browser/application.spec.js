@@ -1980,3 +1980,96 @@ test("resizing an authenticated workspace blocks interaction and preserves its s
   );
   await expect(page.locator("#admin-desktop-notice")).toBeHidden();
 });
+
+test("non-local HTTP loads student and teacher assets without HTTPS upgrades", async ({
+  playwright,
+}) => {
+  const browser = await playwright.chromium.launch();
+  const context = await browser.newContext({
+    baseURL: "http://exam-portal.test:3100",
+    viewport: { width: 1280, height: 800 },
+  });
+  // Keep the browser on an untrustworthy, non-local HTTP origin while
+  // forwarding actual Express responses from the isolated local fixture.
+  await context.route("**://exam-portal.test:3100/**", async (route) => {
+    const url = new URL(route.request().url());
+    const response = await route.fetch({
+      url: "http://127.0.0.1:3100" + url.pathname + url.search,
+      headers: { ...route.request().headers(), host: url.host },
+      maxRedirects: 0,
+    });
+    await route.fulfill({ response });
+  });
+  const page = await context.newPage();
+  const upgraded = [],
+    failures = [],
+    consoleErrors = [],
+    loaded = new Set();
+  page.on("request", (request) => {
+    if (request.url().startsWith("https://exam-portal.test"))
+      upgraded.push(request.url());
+  });
+  page.on("requestfailed", (request) =>
+    failures.push(`${request.url()}: ${request.failure()?.errorText}`),
+  );
+  page.on("console", (message) => {
+    if (message.type() === "error") consoleErrors.push(message.text());
+  });
+  page.on("response", (response) => {
+    if (response.status() === 200) loaded.add(new URL(response.url()).pathname);
+  });
+  try {
+    const response = await page.goto("/");
+    expect(response.status()).toBe(200);
+    expect(response.headers()["content-security-policy"]).not.toContain(
+      "upgrade-insecure-requests",
+    );
+    expect(response.headers()["strict-transport-security"]).toBeUndefined();
+    expect(response.headers()["cross-origin-opener-policy"]).toBeUndefined();
+    expect(await page.evaluate(() => isSecureContext)).toBe(false);
+    await expect(page.getByLabel("Full name", { exact: true })).toBeVisible();
+    await page.evaluate(() => document.fonts.ready);
+    await expect(page.locator(".journey-title")).toHaveCSS(
+      "font-family",
+      /Manrope/,
+    );
+    for (const asset of [
+      "/app.js",
+      "/client.js",
+      "/journey.js",
+      "/style.css",
+      "/journey.css",
+      "/assets/manrope-latin-variable.woff2",
+    ])
+      expect(loaded.has(asset), asset).toBe(true);
+    await page.getByLabel("Full name", { exact: true }).fill("Single Student");
+    await page.getByLabel("Full name", { exact: true }).press("Enter");
+    await expect(
+      page.getByRole("button", { name: /Single Student ·/ }),
+    ).toBeVisible();
+    await signIn(page, "/admin/login");
+    await expect(page.locator("#flexible-workspace")).toBeVisible();
+    expect(loaded.has("/admin.js")).toBe(true);
+    expect(loaded.has("/admin.css")).toBe(true);
+    const cookie = (await context.cookies()).find(
+      (cookie) => cookie.name === "levelup.sid",
+    );
+    expect(cookie).toMatchObject({
+      secure: false,
+      httpOnly: true,
+      sameSite: "Strict",
+    });
+    expect(upgraded).toEqual([]);
+    expect(failures).toEqual([]);
+    expect(
+      consoleErrors.filter((message) =>
+        /ERR_SSL_PROTOCOL_ERROR|Cross-Origin-Opener-Policy.*ignored/i.test(
+          message,
+        ),
+      ),
+    ).toEqual([]);
+  } finally {
+    await context.close();
+    await browser.close();
+  }
+});

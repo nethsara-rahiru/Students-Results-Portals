@@ -115,6 +115,21 @@ Review the [motion preview](docs/recordings/spinner-braking.webm), [welcome scre
 - Audit logs cover login, student/class/paper edits, publication, reordering and old/new marks; passwords and access-code hashes are excluded from admin data and audit payloads.
 - No credentials or `.env` are committed. Treat database dumps and logs as confidential.
 
+## Direct HTTP deployment with PM2
+
+`NODE_ENV=development` supports direct HTTP, including a VPS IP address on port 3000. Helmet keeps its default CSP restrictions and other headers, while omitting `upgrade-insecure-requests`, HSTS, Cross-Origin-Opener-Policy and Origin-Agent-Cluster in this mode. `NODE_ENV=production` retains all of those default protections and Secure admin cookies; use it with the HTTPS reverse-proxy deployment below.
+
+For the existing **ResultPortal** PM2 process, run from the deployed repository checkout on `main`:
+
+```bash
+git pull --ff-only origin main
+npm ci --omit=dev
+HOST=0.0.0.0 PORT=3000 NODE_ENV=development pm2 restart ResultPortal --update-env
+pm2 save
+```
+
+Keep the same values in your private `.env`. `--update-env` replaces stale PM2 environment values; shell-provided values take precedence over `.env`. Open `http://YOUR_VPS_IP:3000/` explicitly and hard-refresh. Check headers with `curl -I http://YOUR_VPS_IP:3000/`: development responses should have CSP without `upgrade-insecure-requests` and no HSTS/COOP/OAC headers. Cached documents or a previously remembered HTTPS-only/HSTS policy can still force HTTPS; use a fresh browser profile if needed. A server cannot clear existing HSTS over plain HTTP.
+
 ## Tests and screenshots
 
 ```bash
@@ -127,7 +142,7 @@ npm audit --omit=dev
 
 Tests launch an isolated real MongoDB process using `mongodb-memory-server`; the first run downloads MongoDB. Browser tests launch their own synthetic-data servers at ports 3100 (name access) and 3101 (access codes) and do not touch your configured database. Chromium may need OS libraries (`npx playwright install --with-deps chromium` on supported systems).
 
-Verified in this delivery: **41 Node tests and 39 Chromium end-to-end tests**, including exact/similar lookup, duplicates, admin auth, CSRF, CRUD, invalid/valid bulk marks, zero/absence/blanks, publishing/unpublishing, ordering, access codes, class boundaries, persistence, rate limits, spinner completion, single/multiple reveals, final celebration, reduced motion, keyboard interactions and mobile layouts. Production dependency audit: **0 reported vulnerabilities** at delivery. See [test report](docs/testing.md).
+Verified in this delivery: **42 Node tests and 40 Chromium end-to-end tests**, including exact/similar lookup, duplicates, admin auth, CSRF, CRUD, invalid/valid bulk marks, zero/absence/blanks, publishing/unpublishing, ordering, access codes, class boundaries, persistence, rate limits, spinner completion, single/multiple reveals, final celebration, reduced motion, keyboard interactions and mobile layouts. Production dependency audit: **0 reported vulnerabilities** at delivery. See [test report](docs/testing.md).
 
 Screenshots use synthetic students: [welcome](docs/screenshots/welcome.png), [teacher spreadsheet](docs/screenshots/admin.png), [final reveal](docs/screenshots/final-result.png), [mobile](docs/screenshots/mobile.png).
 
