@@ -1,8 +1,8 @@
-// Launch quickly, then ease through a slower final roll. The small linear
-// component keeps the last digit visibly moving until the impact frame.
+// Brake continuously through the final second instead of settling into a
+// constant-speed tail. A tiny landing velocity keeps impact on the last frame.
 export function reelProgress(progress) {
   const p = Math.max(0, Math.min(1, progress));
-  return 0.63 * (1 - (1 - p) ** 4) + 0.37 * p;
+  return 0.96 * (1 - (1 - p) ** 2) + 0.04 * p;
 }
 
 export function animateScore(

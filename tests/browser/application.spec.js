@@ -1805,13 +1805,21 @@ for (const viewport of [
     expect(early.length).toBeGreaterThan(2);
     expect(late.length).toBeGreaterThan(2);
     expect(speed(early)).toBeGreaterThan(speed(late) * 2.5);
+    const braking = frames.filter(
+      (f) => impact.time - f.time >= 700 && impact.time - f.time <= 1100,
+    );
+    const approach = frames.filter(
+      (f) => impact.time - f.time >= 150 && impact.time - f.time <= 450,
+    );
+    expect(braking.length).toBeGreaterThan(2);
+    expect(approach.length).toBeGreaterThan(2);
+    expect(speed(braking)).toBeGreaterThan(speed(approach) * 1.7);
     const before = frames.filter(
       (f) => impact.time - f.time >= 180 && impact.time - f.time <= 230,
     );
     expect(before.length).toBeGreaterThan(0);
-    // A substantial part of a digit must still be travelling; allow a frame
-    // of sampling jitter, while the separate gap check bounds first impact.
-    expect(Math.min(...before.map((f) => f.remaining))).toBeGreaterThan(0.5);
+    // The slower final approach must still move, with no idle wait for impact.
+    expect(Math.min(...before.map((f) => f.remaining))).toBeGreaterThan(0.03);
     expect(Math.abs(impact.remaining)).toBeLessThan(0.01);
     const previous = frames[frames.indexOf(impact) - 1];
     expect(impact.time - previous.time).toBeLessThan(100);
