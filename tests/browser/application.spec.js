@@ -14,6 +14,7 @@ test("no suggestions before submission, multi-paper reveal and final celebration
     if (r.url().endsWith("/api/lookup")) lookups++;
   });
   await page.goto("/");
+  await expect(page).toHaveTitle("Exam Result Portal");
   await expect(page.locator("form, .panel, header, footer")).toHaveCount(0);
   await expect(page.getByLabel("Full name", { exact: true })).toBeVisible();
   await page.getByLabel("Full name", { exact: true }).fill("Maya Fernando");
@@ -150,7 +151,7 @@ test("teacher worksheet: named headers, mark entry, paste, fill, undo, validatio
   await cell("C2").press("Tab");
   await saved();
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.locator("h1").click();
+  await page.locator("#app h1").click();
   await page.evaluate(() => scrollTo(0, 0));
   await page.screenshot({ path: "docs/screenshots/admin.png", fullPage: true });
   await page
@@ -171,21 +172,25 @@ test("teacher worksheet: named headers, mark entry, paste, fill, undo, validatio
   await saved();
   await expect(cell("D1")).toHaveValue("Draft Paper 03");
 });
-test("teacher mobile workspace remains within viewport", async ({ page }) => {
+test("small admin screens show a desktop notice before any private requests", async ({
+  page,
+}) => {
   await page.setViewportSize({ width: 390, height: 844 });
+  let calls = 0;
+  page.on("request", (r) => {
+    if (new URL(r.url()).pathname.startsWith("/api/")) calls++;
+  });
   await page.goto("/admin");
-  await page.getByLabel("Username", { exact: true }).fill("teacher");
-  await page.getByLabel("Password", { exact: true }).fill("browser-password");
-  await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page.locator(".sheet")).toBeVisible();
-  expect(
-    await page.evaluate(
-      () => document.documentElement.scrollWidth <= innerWidth,
-    ),
-  ).toBe(true);
-  await page.locator("td input").last().focus();
-  await page.keyboard.press("Tab");
-  await expect(page.locator("td input").last()).not.toBeFocused();
+  await expect(
+    page.getByRole("heading", { name: "Desktop access required" }),
+  ).toBeVisible();
+  await expect(page.getByLabel("Username", { exact: true })).toHaveCount(0);
+  await expect(page.locator(".sheet")).toHaveCount(0);
+  expect(calls).toBe(0);
+  await page.screenshot({ path: "docs/screenshots/admin-mobile-blocked.png" });
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await expect(page.getByLabel("Username", { exact: true })).toBeVisible();
+  await expect(page).toHaveTitle("Teacher Login · Exam Result Portal");
 });
 
 async function signIn(page, path = "/admin") {
@@ -199,7 +204,7 @@ test("admin pages navigate as documents, refresh and history preserve the page, 
 }) => {
   await signIn(page, "/admin/students");
   await expect(page).toHaveURL(/\/admin\/students$/);
-  await expect(page).toHaveTitle("Students · LevelUp Results");
+  await expect(page).toHaveTitle("Students · Exam Result Portal");
   const navigations = [];
   page.on("request", (r) => {
     if (r.isNavigationRequest() && r.frame() === page.mainFrame())
@@ -219,7 +224,7 @@ test("admin pages navigate as documents, refresh and history preserve the page, 
     await expect(
       page.getByRole("link", { name: section, exact: true }),
     ).toHaveAttribute("aria-current", "page");
-    await expect(page).toHaveTitle(section + " · LevelUp Results");
+    await expect(page).toHaveTitle(section + " · Exam Result Portal");
   }
   expect(navigations.length).toBeGreaterThanOrEqual(5);
   await page.reload();
@@ -606,10 +611,12 @@ test("admin directories filter, empty states recover, and dialogs support keyboa
     fullPage: true,
   });
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.getByRole("link", { name: "Students", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Desktop access required" }),
+  ).toBeVisible();
   await expect(
     page.getByRole("navigation", { name: "Workspace sections" }),
-  ).toBeVisible();
+  ).toBeHidden();
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= innerWidth,
@@ -822,17 +829,13 @@ test("Name header class dropdown autofills roster, paper headers and actual mark
     fullPage: true,
   });
   await page.setViewportSize({ width: 390, height: 844 });
-  await page
-    .getByRole("combobox", { name: "Select class", exact: true })
-    .scrollIntoViewIfNeeded();
-  const picker = await page.locator(".class-picker-panel").boundingBox();
-  expect(picker.x).toBeGreaterThanOrEqual(0);
-  expect(picker.x + picker.width).toBeLessThanOrEqual(390);
-  expect(
-    await page.evaluate(
-      () => document.documentElement.scrollWidth <= innerWidth,
-    ),
-  ).toBeTruthy();
+  await expect(
+    page.getByRole("heading", { name: "Desktop access required" }),
+  ).toBeVisible();
+  await expect(page.locator("#app")).toBeHidden();
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await expect(cell("A2")).toBeVisible();
+  await expect(page.locator("#admin-desktop-notice")).toBeHidden();
 });
 
 test("large rosters load without a cap and render a bounded window", async ({
@@ -939,7 +942,7 @@ test("working rows and columns expand, save, reload, and feed actual mark formul
   await expect(header).toHaveValue("Practice calculations");
   await page.setViewportSize({ width: 1440, height: 1000 });
   await jump("DW650");
-  await page.locator("h1").click();
+  await page.locator("#app h1").click();
   await page.evaluate(() => scrollTo(0, 0));
   await page.screenshot({
     path: "docs/screenshots/expandable-worksheet.png",
@@ -1126,14 +1129,17 @@ test("formula entry suggests functions and inserts clicked cell references witho
   );
   await expect(editor).toHaveValue(String(expected));
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await editor.click();
+  const target = page.getByRole("textbox", { name: "Go to cell", exact: true });
+  await target.fill(address);
+  await target.press("Enter");
+  await expect(editor).toBeFocused();
   await bar.click();
   await bar.press("End");
   await bar.pressSequentially("+");
   await expect(
     page.getByRole("listbox", { name: "Formula functions" }),
   ).toBeVisible();
-  await page.locator("h1").scrollIntoViewIfNeeded();
+  await page.locator("#app h1").scrollIntoViewIfNeeded();
   await page.screenshot({
     path: "docs/screenshots/formula-functions.png",
     fullPage: true,
@@ -1233,7 +1239,7 @@ test("a saved average column converts to a published paper and recalculates for 
   await studentPage.close();
 
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.locator("h1").click();
+  await page.locator("#app h1").click();
   await page.evaluate(() => scrollTo(0, 0));
   await page.screenshot({
     path: "docs/screenshots/calculated-paper.png",
@@ -1850,3 +1856,127 @@ for (const viewport of [
     );
   });
 }
+
+for (const device of [
+  {
+    name: "phone",
+    userAgent:
+      "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/130.0 Mobile Safari/537.36",
+    viewport: { width: 393, height: 852 },
+    screen: { width: 393, height: 852 },
+    isMobile: true,
+    hasTouch: true,
+  },
+  {
+    name: "phone in desktop mode",
+    userAgent:
+      "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/130.0 Safari/537.36",
+    viewport: { width: 1280, height: 800 },
+    screen: { width: 393, height: 852 },
+    isMobile: false,
+    hasTouch: true,
+  },
+  {
+    name: "iPad in desktop mode",
+    userAgent:
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15) AppleWebKit/605.1.15 Version/17.0 Safari/605.1.15",
+    viewport: { width: 1366, height: 1024 },
+    screen: { width: 1024, height: 1366 },
+    isMobile: false,
+    hasTouch: true,
+  },
+]) {
+  test(`admin is restricted on ${device.name} while student results remain usable`, async ({
+    browser,
+  }) => {
+    const { name, ...options } = device;
+    const context = await browser.newContext({
+      ...options,
+      baseURL: "http://localhost:3100",
+    });
+    const page = await context.newPage();
+    let privateCalls = 0;
+    page.on("request", (request) => {
+      if (
+        new URL(request.url()).pathname.startsWith("/api/admin") ||
+        new URL(request.url()).pathname === "/api/login"
+      )
+        privateCalls++;
+    });
+    try {
+      for (const path of [
+        "/admin/login",
+        "/admin/marks",
+        "/admin/students",
+        "/admin/classes",
+        "/admin/papers",
+        "/admin/performance",
+        "/admin/history",
+      ]) {
+        await page.goto(path);
+        await expect(
+          page.getByRole("heading", { name: "Desktop access required" }),
+        ).toBeVisible();
+        await expect(page.getByLabel("Username", { exact: true })).toHaveCount(
+          0,
+        );
+        await expect(page.locator(".admin-sidebar")).toHaveCount(0);
+      }
+      expect(privateCalls).toBe(0);
+      await page.screenshot({
+        path: `docs/screenshots/admin-${name.replaceAll(" ", "-")}.png`,
+      });
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      await identify(page, "Single Student");
+      await expect(
+        page.getByRole("link", { name: "Exam Result Portal home" }),
+      ).toBeVisible();
+      await page
+        .getByRole("button", { name: /Mathematics · Paper 01/ })
+        .click();
+      await expect(page.locator("#score")).toHaveAttribute(
+        "aria-label",
+        "Score 0",
+      );
+    } finally {
+      await context.close();
+    }
+  });
+}
+
+test("resizing an authenticated workspace blocks interaction and preserves its saved state", async ({
+  page,
+}) => {
+  await signIn(page, "/admin/students");
+  await expect(
+    page.getByRole("heading", { name: "Student directory" }),
+  ).toBeVisible();
+  await page.getByLabel("Search students", { exact: true }).fill("Maya");
+  await page
+    .getByRole("button", { name: "+ Add student", exact: true })
+    .click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await page.setViewportSize({ width: 1023, height: 800 });
+  await expect(
+    page.getByRole("heading", { name: "Desktop access required" }),
+  ).toBeVisible();
+  await expect(page.getByRole("dialog")).toBeHidden();
+  await expect(page.locator("#app")).toHaveAttribute("inert", "");
+  const denied = await page.evaluate(async () => {
+    try {
+      await (await import("/client.js")).api("/admin/data");
+      return null;
+    } catch (e) {
+      return { status: e.status, code: e.code };
+    }
+  });
+  expect(denied).toEqual({ status: 403, code: "DESKTOP_REQUIRED" });
+  await page.setViewportSize({ width: 1024, height: 800 });
+  await expect(
+    page.getByRole("heading", { name: "Student directory" }),
+  ).toBeVisible();
+  await expect(page.getByLabel("Search students", { exact: true })).toHaveValue(
+    "Maya",
+  );
+  await expect(page.locator("#admin-desktop-notice")).toBeHidden();
+});

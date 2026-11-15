@@ -1,0 +1,69 @@
+.admin-desktop-notice {
+  display: none;
+  min-height: 100svh;
+  place-items: center;
+  padding: 48px 24px;
+  color: #e8edf7;
+  font-family: Manrope, system-ui, sans-serif;
+  background: linear-gradient(140deg, #101e30, #171429);
+}
+.desktop-notice-content {
+  width: min(100%, 520px);
+  display: grid;
+  gap: 22px;
+}
+.desktop-notice-brand {
+  color: #eaf5ff;
+  font-size: 20px;
+  font-weight: 800;
+  text-decoration: none;
+  letter-spacing: -0.5px;
+}
+.admin-desktop-notice .eyebrow {
+  margin-top: 28px;
+  color: #9ec9ea;
+}
+.admin-desktop-notice h1 {
+  margin: 0;
+  font-size: clamp(2rem, 7vw, 3rem);
+  line-height: 1.15;
+  letter-spacing: -1.5px;
+}
+.admin-desktop-notice p {
+  margin: 0;
+  color: #b9c6d9;
+  line-height: 1.7;
+}
+.desktop-notice-return {
+  justify-self: start;
+  border-radius: 10px;
+  padding: 13px 20px;
+  background: linear-gradient(120deg, #159ed4, #9d59eb);
+  color: #07101d;
+  font-weight: 700;
+  text-decoration: none;
+}
+.desktop-notice-return:focus-visible,
+.desktop-notice-brand:focus-visible {
+  outline: 3px solid #a9dfff;
+  outline-offset: 5px;
+}
+html[data-admin-restricted] #app {
+  display: none !important;
+}
+html[data-admin-restricted] .admin-desktop-notice {
+  display: grid;
+}
+@media (max-width: 1023px) {
+  body[data-admin-page] #app {
+    display: none !important;
+  }
+  body[data-admin-page] .admin-desktop-notice {
+    display: grid;
+  }
+}
+/* The heading receives reading focus; interactive links keep visible rings. */
+#desktop-required-title:focus {
+  outline: none;
+  box-shadow: none;
+}

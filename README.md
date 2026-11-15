@@ -1,4 +1,4 @@
-# LevelUp Results
+# Exam Result Portal
 
 A usable student results portal and teacher workspace, built with vanilla HTML/CSS/JavaScript, Node.js/Express and MongoDB. This branch extends the original MVP while preserving student/paper IDs and existing marks.
 
@@ -78,6 +78,14 @@ The theme uses **#159ED4 → #9D59EB**, with subtle drifting background gradient
 6. Verify marks, then explicitly choose **published** in the paper editor. **draft** and **unpublished** papers are hidden from student APIs. Editing an already published mark changes its visible value immediately; unpublish first if reviewing changes privately.
 7. **Performance** shows normalized averages; **History** shows the latest 200 audit events with prior/new marks. Audit events remain in MongoDB beyond this display limit.
 
+## Desktop-only teacher access
+
+The teacher workspace, including sign-in, requires a desktop/laptop browser with a viewport at least **1024 CSS pixels wide**. Recognized phones and tablets receive a desktop-access notice, including common “Request desktop site” modes detected through touch, pointer, platform and screen signals. Small desktop windows show the same notice and resume when widened. Student lookup and results remain available on mobile.
+
+The server rejects mobile user agents, mobile client hints, and declared unsupported device/viewport headers for `/admin`, `/api/login`, and `/api/admin/*`. The browser guard runs before teacher session/data requests and blocks interactions and new private API calls when the window becomes unsupported. An already-open workspace is hidden and made inert; completed/saved work is retained when the window is widened. In-flight saves can finish. Detection is best-effort: browsers can spoof or suppress device signals. This is a workspace compatibility restriction, not device authentication; secure sessions, CSRF and API authorization remain the security controls.
+
+The public name is **Exam Result Portal**. Existing database names, stable IDs, session cookie/storage keys, clipboard format, and systemd service paths retain their legacy internal identifiers so existing installations and remembered student profiles keep working.
+
 ## Student experience and privacy
 
 The landing page shows only a name prompt and textbox, without a card or form. Enter your full name and press Enter (or Go on a mobile keyboard) to look up your profile. Lookup never runs while typing. Names match after case/whitespace normalization; otherwise up to five similar names are offered. Confirm the profile, then its stable ID is remembered in `localStorage`. There is no ordinary account-switching control. Clearing browser storage can reset this convenience; it is **not authentication or a permanent identity lock**. On a shared device, clear site data between users.
@@ -96,7 +104,7 @@ The motion uses lightweight SVG lines and rectangles, with no canvas, WebGL or G
 
 **Skip transition** completes the current layout morph; **Skip animation** finishes the score reels exactly. Reduced-motion preferences remove motion, including when changed during a reveal. Existing reels are reused on replay, and cancelled callbacks cannot complete a later paper. The name-entry landing still contains only the name prompt/textbox before submission.
 
-Review the [motion preview](docs/recordings/student-journey.webm), [welcome scene](docs/screenshots/student-welcome.png), [paper frame](docs/screenshots/paper-intro.png), [final reveal](docs/screenshots/final-result.png) and [summary](docs/screenshots/results-summary.png). All preview data is synthetic.
+Review the [motion preview](docs/recordings/spinner-braking.webm), [welcome screen](docs/screenshots/welcome.png), [final reveal](docs/screenshots/final-result.png) and [teacher workspace](docs/screenshots/admin.png). All preview data is synthetic.
 
 ## Security
 
@@ -119,7 +127,7 @@ npm audit --omit=dev
 
 Tests launch an isolated real MongoDB process using `mongodb-memory-server`; the first run downloads MongoDB. Browser tests launch their own synthetic-data servers at ports 3100 (name access) and 3101 (access codes) and do not touch your configured database. Chromium may need OS libraries (`npx playwright install --with-deps chromium` on supported systems).
 
-Verified in this delivery: **15 API integration tests and 15 Chromium end-to-end tests**, including exact/similar lookup, duplicates, admin auth, CSRF, CRUD, invalid/valid bulk marks, zero/absence/blanks, publishing/unpublishing, ordering, access codes, class boundaries, persistence, rate limits, spinner completion, single/multiple reveals, final celebration, reduced motion, keyboard interactions and mobile layouts. Production dependency audit: **0 reported vulnerabilities** at delivery. See [test report](docs/testing.md).
+Verified in this delivery: **41 Node tests and 39 Chromium end-to-end tests**, including exact/similar lookup, duplicates, admin auth, CSRF, CRUD, invalid/valid bulk marks, zero/absence/blanks, publishing/unpublishing, ordering, access codes, class boundaries, persistence, rate limits, spinner completion, single/multiple reveals, final celebration, reduced motion, keyboard interactions and mobile layouts. Production dependency audit: **0 reported vulnerabilities** at delivery. See [test report](docs/testing.md).
 
 Screenshots use synthetic students: [welcome](docs/screenshots/welcome.png), [teacher spreadsheet](docs/screenshots/admin.png), [final reveal](docs/screenshots/final-result.png), [mobile](docs/screenshots/mobile.png).
 
@@ -160,9 +168,9 @@ Regularly test `mongorestore` to an **isolated** database/server and verify stud
 
 ### Admin workspace
 
-Open `/admin` to sign in. Each section has its own URL and supports refresh and browser history. The redesigned workspace includes a desktop sidebar, horizontally scrollable mobile navigation, searchable student/class/paper/performance directories, student activity and paper publication filters, and searchable change history. Performance bars use normalized percentages and exclude absent or blank entries. Marks save automatically; wait for the save indicator before leaving. Expand the keyboard guide for spreadsheet shortcuts. Edit dialogs support Escape, Cancel, validation feedback, and a pending-save state.
+Open `/admin` to sign in. Each section has its own URL and supports refresh and browser history. The desktop-only workspace includes a sidebar, searchable student/class/paper/performance directories, student activity and paper publication filters, and searchable change history. Performance bars use normalized percentages and exclude absent or blank entries. Marks save automatically; wait for the save indicator before leaving. Expand the keyboard guide for spreadsheet shortcuts. Edit dialogs support Escape, Cancel, validation feedback, and a pending-save state.
 
-Admin UI previews: [marks workspace](docs/screenshots/admin.png), [paper management](docs/screenshots/admin-papers.png), and [mobile directory](docs/screenshots/admin-mobile.png).
+Admin UI previews: [marks workspace](docs/screenshots/admin.png), [paper management](docs/screenshots/admin-papers.png), and [mobile access restriction](docs/screenshots/admin-mobile.png).
 
 ### Class marks worksheet
 

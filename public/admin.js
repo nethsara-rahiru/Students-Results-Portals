@@ -1,3 +1,4 @@
+import { installAdminDesktopGuard } from "./admin-access.js";
 import { mountMarksWorkbook } from "./marks-workbook.js";
 import { api, app, esc, btn, shell, notify } from "./client.js";
 let sessionInfo, sheet;
@@ -119,7 +120,7 @@ async function admin() {
   const page = document.body.dataset.adminPage;
   sheet = null;
   app.innerHTML = `<a class="skip-link" href="#workspace">Skip to workspace</a>
-    <aside class="admin-sidebar"><a class="admin-brand" href="/admin/marks"><span class="brand-mark">${icon("performance")}</span><span>LevelUp<small>RESULTS WORKSPACE</small></span></a><p class="nav-caption">MANAGE & GROW</p><nav class="admin-nav" aria-label="Workspace sections">${Object.entries(
+    <aside class="admin-sidebar"><a class="admin-brand" href="/admin/marks"><span class="brand-mark">${icon("performance")}</span><span>Exam Result Portal<small>TEACHER WORKSPACE</small></span></a><p class="nav-caption">MANAGE & GROW</p><nav class="admin-nav" aria-label="Workspace sections">${Object.entries(
       pageTitles,
     )
       .map(
@@ -128,8 +129,8 @@ async function admin() {
       )
       .join(
         "",
-      )}</nav><div class="sidebar-note"><span class="eyebrow">A LITTLE PROGRESS, EVERY DAY</span><p>Behind every result,<br>there’s a next chapter.</p><span class="muted">LevelUp Results</span></div><div class="teacher-profile"><span class="teacher-avatar">T</span><div><strong>Teacher workspace</strong><small>Administrator</small></div><button id="logout" class="secondary">Sign out</button></div></aside>
-    <div class="admin-content"><header class="admin-topbar"><span>Workspace <span class="muted">/ ${pageTitles[page]}</span></span><span class="workspace-label">TEACHER EDITION</span></header><main class="dashboard" tabindex="-1"><div class="dashboard-title"><p class="eyebrow">YOUR TEACHING, IN FOCUS</p><h1>${pageTitles[page]}</h1><p class="muted">${descriptions[page]}</p></div><div class="stats"><article><span>Active students</span><strong>${data.students.filter((s) => s.active).length}</strong><small>Learning journeys</small></article><article><span>Total papers</span><strong>${data.papers.length}</strong><small>In spreadsheet order</small></article><article><span>Published</span><strong>${data.papers.filter((p) => p.state === "published").length}</strong><small>Visible to students</small></article><article><span>Classes</span><strong>${data.classes.length}</strong><small>Organized for you</small></article></div><section class="panel workspace"><div id="workspace" tabindex="-1"></div></section><footer>LevelUp Results<span>Small steps. Meaningful progress.</span></footer></main></div>`;
+      )}</nav><div class="sidebar-note"><span class="eyebrow">A LITTLE PROGRESS, EVERY DAY</span><p>Behind every result,<br>there’s a next chapter.</p><span class="muted">Exam Result Portal</span></div><div class="teacher-profile"><span class="teacher-avatar">T</span><div><strong>Teacher workspace</strong><small>Administrator</small></div><button id="logout" class="secondary">Sign out</button></div></aside>
+    <div class="admin-content"><header class="admin-topbar"><span>Workspace <span class="muted">/ ${pageTitles[page]}</span></span><span class="workspace-label">TEACHER EDITION</span></header><main class="dashboard" tabindex="-1"><div class="dashboard-title"><p class="eyebrow">YOUR TEACHING, IN FOCUS</p><h1>${pageTitles[page]}</h1><p class="muted">${descriptions[page]}</p></div><div class="stats"><article><span>Active students</span><strong>${data.students.filter((s) => s.active).length}</strong><small>Learning journeys</small></article><article><span>Total papers</span><strong>${data.papers.length}</strong><small>In spreadsheet order</small></article><article><span>Published</span><strong>${data.papers.filter((p) => p.state === "published").length}</strong><small>Visible to students</small></article><article><span>Classes</span><strong>${data.classes.length}</strong><small>Organized for you</small></article></div><section class="panel workspace"><div id="workspace" tabindex="-1"></div></section><footer>Exam Result Portal<span>Small steps. Meaningful progress.</span></footer></main></div>`;
   document.querySelector("#logout").onclick = async () => {
     document.activeElement?.blur();
     if (
@@ -413,18 +414,23 @@ window.addEventListener("beforeunload", (event) => {
 window.addEventListener("pageshow", (event) => {
   if (event.persisted) location.reload();
 });
-try {
-  sessionInfo = await api("/session");
-  if (document.body.dataset.adminPage === "login") {
-    if (sessionInfo.admin) location.replace(loginDestination());
-    else login();
-  } else if (!sessionInfo.admin) requireLogin();
-  else await admin();
-} catch (error) {
-  if (error.status === 401) requireLogin();
-  else
-    app.innerHTML = `<main class="center"><section class="panel stack"><h1>Unable to load this page.</h1><p role="alert">${esc(error.message)}</p><button id="retry">Try again</button></section></main>`;
-  document
-    .querySelector("#retry")
-    ?.addEventListener("click", () => location.reload());
+const desktopAccess = installAdminDesktopGuard();
+if (desktopAccess.allowed) {
+  try {
+    sessionInfo = await api("/session");
+    if (document.body.dataset.adminPage === "login") {
+      if (sessionInfo.admin) location.replace(loginDestination());
+      else login();
+    } else if (!sessionInfo.admin) requireLogin();
+    else await admin();
+    desktopAccess.markStarted();
+  } catch (error) {
+    if (error.code === "DESKTOP_REQUIRED") desktopAccess.block();
+    else if (error.status === 401) requireLogin();
+    else
+      app.innerHTML = `<main class="center"><section class="panel stack"><h1>Unable to load this page.</h1><p role="alert">${esc(error.message)}</p><button id="retry">Try again</button></section></main>`;
+    document
+      .querySelector("#retry")
+      ?.addEventListener("click", () => location.reload());
+  }
 }

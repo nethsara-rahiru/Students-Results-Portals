@@ -84,3 +84,8 @@ Login-rate tests verify that successful teacher sign-ins do not consume the fail
 ## Continuous braking through the final second
 
 36 Node tests and 35 browser tests cover the final-roll correction. A new unit check requires the final fifth to be less than half as fast as the preceding fifth and checks decreasing speed throughout braking. Desktop/mobile frame checks now compare two windows within the final second, in addition to opening-versus-ending speed, exact score, visible motion until landing, immediate impact, and complete bubble fade-out. A recorded desktop preview uses synthetic results.
+
+
+## Exam Result Portal and desktop-only administration
+
+41 Node tests and 39 browser tests cover this update. Device policy tests cover the 1024px boundary, mobile identities/client hints, desktop-mode phones, desktop-mode iPads and mouse-equipped touchscreen laptops. API checks verify mobile/viewport rejection for every admin entry path, sign-in and private records even with an authenticated session, no leaked student records, no-store responses, desktop support, and continued student-page access. Browser checks cover restriction before private requests, narrow-window recovery, all admin page types on phone and desktop-mode emulations, modal closure and inert content on resize, preserved directory state, rejected private calls, full renamed branding/titles and usable mobile student reveals. Physical-device detection is best-effort; authentication and CSRF remain mandatory. Screenshots use synthetic records.

@@ -1,5 +1,5 @@
 [Unit]
-Description=LevelUp Results
+Description=Exam Result Portal
 After=network-online.target
 Wants=network-online.target
 
