@@ -79,6 +79,7 @@ test("mobile layout and keyboard profile selection", async ({ page }) => {
   await page.goto("/");
   await page.getByLabel("Full name", { exact: true }).focus();
   await page.keyboard.type("Maya Fernando");
+  await page.screenshot({ path: "docs/screenshots/name-entry-mobile.png" });
   await page.keyboard.press("Enter");
   await page.getByRole("button", { name: /Maya Fernando ·/ }).focus();
   await page.keyboard.press("Enter");

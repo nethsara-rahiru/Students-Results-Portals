@@ -233,3 +233,5 @@ Recorded preview: [spinner braking into the result](docs/recordings/spinner-brak
 ### Styled loading states
 
 Student and teacher startup screens use the portal’s cyan/purple theme, local typography, a paper emblem and an indeterminate progress bar. Compact loaders cover worksheet/history fetching; lookup, result loading, sign-in and saves use inline activity bars. They reflect real pending requests and clear immediately when ready, without artificial delays or invented percentages. Reduced-motion preferences keep the indicators static, and existing error/retry states replace the loader on failure. [Student preview](docs/screenshots/loading-student.png) · [Teacher preview](docs/screenshots/loading-admin.png) · [Mobile preview](docs/screenshots/loading-mobile.png).
+
+The student name/access-code field uses a subtle cyan–purple tint, muted border and violet focus glow. Dark autofill styling, keyboard focus, reduced motion and system forced-color preferences remain supported. [Mobile name entry preview](docs/screenshots/name-entry-mobile.png).
