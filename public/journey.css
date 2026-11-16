@@ -176,22 +176,68 @@
 }
 .journey-entry > input {
   height: 60px;
-  padding: 18px 8px;
-  background: transparent;
-  border: 0;
-  border-radius: 0;
+  padding: 16px 20px;
+  background: linear-gradient(115deg, #159ed40b, #9d59eb0e);
+  border: 1px solid #8fa4cf30;
+  border-radius: 12px;
+  font-family: inherit;
   font-size: clamp(1rem, 3.5vw, 1.22rem);
   text-align: center;
-  color: #eef5ff;
-  box-shadow: none;
+  color: #dce6f5;
+  caret-color: #bda4f0;
+  color-scheme: dark;
+  box-shadow: inset 0 1px 0 #d6e4ff04;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
 }
 .journey-entry > input::placeholder {
-  color: #a7b9cf;
+  color: #9dadc2;
   opacity: 1;
 }
+.journey-entry > input:hover {
+  border-color: #a5a2dd50;
+}
+.journey-entry > input:focus,
 .journey-entry > input:focus-visible {
-  outline: 2px solid #85d0ed;
-  outline-offset: 3px;
+  outline: none;
+  border-color: #9b8dcb;
+  box-shadow:
+    0 0 0 3px #9d59eb16,
+    0 6px 24px #159ed40a;
+}
+/* Keep browser-filled names in the same dark palette. */
+.journey-entry > input:-webkit-autofill {
+  -webkit-text-fill-color: #dce6f5;
+  caret-color: #bda4f0;
+  box-shadow: 0 0 0 1000px #172135 inset;
+}
+.journey-entry > input:-webkit-autofill:focus {
+  box-shadow:
+    0 0 0 1000px #172135 inset,
+    0 0 0 3px #9d59eb16;
+}
+@media (prefers-reduced-motion: reduce) {
+  .journey-entry > input {
+    transition: none;
+  }
+}
+@media (forced-colors: active) {
+  .journey-entry > input {
+    background: Canvas;
+    color: CanvasText;
+    border-color: ButtonText;
+    box-shadow: none;
+  }
+  .journey-entry > input:-webkit-autofill {
+    -webkit-text-fill-color: CanvasText;
+    box-shadow: none;
+  }
+  .journey-entry > input:focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 3px;
+    box-shadow: none;
+  }
 }
 .journey-entry #suggest:empty {
   display: none;
