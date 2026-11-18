@@ -48,7 +48,7 @@ db.createUser({user: 'levelup', pwd: passwordPrompt(), roles: [{role: 'readWrite
 
 Use an appropriately URL-encoded password in `MONGODB_URI`, with `authSource=levelup_results`. Atlas users need equivalent access. Collections, indexes and new-collection JSON schema validators are created at startup. Existing MVP collections receive compatible field migrations and indexes without replacing IDs. Existing collection validators are left intact; application validation applies to every API write. Back up before upgrading, and stop old server processes during migration.
 
-Collections: `students`, `classes`, `papers`, `marks`, `administrators`, `auditLogs`, `sessions`. Marks have a unique `(studentId, paperId)` index; administrator usernames and class names are unique. Duplicate student names are allowed and must use distinct class/profile labels. Internal ObjectIds, never names, identify marks.
+Collections: `students`, `classes`, `papers`, `marks`, `administrators`, `auditLogs`, `sessions`, `resultViews`. Marks have a unique `(studentId, paperId)` index; administrator usernames and class names are unique. Duplicate student names are allowed and must use distinct class/profile labels. Internal ObjectIds, never names, identify marks.
 
 ## Teacher pages
 
@@ -63,6 +63,7 @@ The admin workspace uses separate server-served HTML pages with normal navigatio
 | Classes | `/admin/classes` |
 | Performance | `/admin/performance` |
 | Audit history | `/admin/history` |
+| Result view activity | `/admin/views` |
 
 `/admin` redirects to the marks page. Logged-out requests redirect to sign-in and return to the requested page after login. Each protected document and API requires the existing administrator session. In-app navigation waits for a pending marks save; failed saves keep the teacher on the sheet to retry. Forms remain on their own page after saving.
 
@@ -110,10 +111,22 @@ Review the [motion preview](docs/recordings/spinner-braking.webm), [welcome scre
 
 - Mongo-backed sessions; session rotation on login; bcrypt password hashing; eight-hour HTTP-only, SameSite=Strict cookies (Secure in production).
 - Synchronizer CSRF token on every state-changing API call, plus same-origin checks. Administrative APIs always require a teacher session.
-- Helmet CSP/security headers, escaped UI text, bounded JSON bodies, Zod validation, safe API errors and rate limits (login 10/15min, lookup 25/15min, code attempts 15/15min, result reads 120/15min, overall API 1,200/15min per IP).
+- Helmet CSP/security headers, escaped UI text, bounded JSON bodies, Zod validation, safe API errors and rate limits (login 10/15min, lookup 25/15min, code attempts 15/15min, result reads 120/15min, result-view records 600/15min, overall API 1,200/15min per IP).
 - Student APIs return one selected student's published, class-appropriate numeric results only. No student API returns the marks table.
 - Audit logs cover login, student/class/paper edits, publication, reordering and old/new marks; passwords and access-code hashes are excluded from admin data and audit payloads.
 - No credentials or `.env` are committed. Treat database dumps and logs as confidential.
+
+## Student result-view tracking
+
+Open **Result views** (`/admin/views`) from the teacher sidebar. The report shows students with recorded visits or no recorded views, visit counts, browsers with active views, and the last viewed time. Search by student name, filter by class/status, and page through the roster. **View browsers** shows each random browser ID, browser family, first/last recording, visits and per-paper reveal counts.
+
+A **visit** is recorded when the first score in a results journey is actually revealed on a visible page. Loading a profile, fetching results or opening a paper title does not count. Completing more papers in that journey adds paper reveals to the same visit. Replaying an individual paper adds a reveal; **Replay journey**, **Replay my journey**, or opening results after a reload starts a new visit when a score is shown. Counts begin when this feature is deployed; there is no historical backfill.
+
+The browser stores a cryptographically random 128-bit value under `exam-result-portal.browser-id` in localStorage. It is independent of the remembered student profile and supports the direct HTTP deployment using `crypto.getRandomValues`. Server records use stable student/paper IDs, so duplicate student names remain separate. Shared browser profiles share an ID; another browser/profile, incognito session or cleared storage can create a new one. Changing the portal origin (HTTP/HTTPS, hostname or port) also creates a separate local ID. If browser storage is blocked, identification lasts only for the current document.
+
+Admins can **Reset browser count** for one student/browser, **Reset student count**, or **Reset all view counts**, with confirmation. Resets are CSRF-protected and audited. They clear counted activity while retaining browser IDs, marks and publications. Existing event IDs are kept inactive so a retried request cannot restore a reset count. New reveals count again using the same browser ID. Events use server receipt time; a previously undelivered request arriving after a reset may appear as new activity. Event metadata (IDs, browser family, times and counted/reset state) is retained until database maintenance; no marks, IP addresses or full user-agent strings are stored in view records. Include `resultViews` in backups.
+
+Tracking is best-effort and does not authenticate the student or prove attention/attendance. Browser IDs and requests can be edited or spoofed; name-only results remain name-only access. Access-code mode requires the matching student grant, and the endpoint only accepts active students' published, class-appropriate valid results. Counts/details/reset routes are admin-only. Recording is nonblocking, uses idempotent event IDs and up to two retries for transient failures; offline use, blocked requests, rate limits or expired sessions can undercount. Public record responses disclose no counts or other students' data. [Report preview](docs/screenshots/result-views.png) · [Browser detail preview](docs/screenshots/result-view-browsers.png).
 
 ## Direct HTTP deployment with PM2
 
@@ -142,7 +155,7 @@ npm audit --omit=dev
 
 Tests launch an isolated real MongoDB process using `mongodb-memory-server`; the first run downloads MongoDB. Browser tests launch their own synthetic-data servers at ports 3100 (name access) and 3101 (access codes) and do not touch your configured database. Chromium may need OS libraries (`npx playwright install --with-deps chromium` on supported systems).
 
-Verified in this delivery: **42 Node tests and 43 Chromium end-to-end tests**, including exact/similar lookup, duplicates, admin auth, CSRF, CRUD, invalid/valid bulk marks, zero/absence/blanks, publishing/unpublishing, ordering, access codes, class boundaries, persistence, rate limits, spinner completion, single/multiple reveals, final celebration, reduced motion, keyboard interactions and mobile layouts. Production dependency audit: **0 reported vulnerabilities** at delivery. See [test report](docs/testing.md).
+Verified in this delivery: **48 Node tests and 46 Chromium end-to-end tests**, including exact/similar lookup, duplicates, admin auth, CSRF, CRUD, invalid/valid bulk marks, zero/absence/blanks, publishing/unpublishing, ordering, access codes, class boundaries, persistence, rate limits, spinner completion, single/multiple reveals, final celebration, reduced motion, keyboard interactions and mobile layouts. Production dependency audit: **0 reported vulnerabilities** at delivery. See [test report](docs/testing.md).
 
 Screenshots use synthetic students: [welcome](docs/screenshots/welcome.png), [teacher spreadsheet](docs/screenshots/admin.png), [final reveal](docs/screenshots/final-result.png), [mobile](docs/screenshots/mobile.png).
 

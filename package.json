@@ -5,10 +5,10 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "test": "node --test tests/api.test.js tests/formulas.test.js tests/score-effects.test.js tests/admin-access.test.js",
+    "test": "node --test tests/api.test.js tests/formulas.test.js tests/score-effects.test.js tests/admin-access.test.js tests/result-views.test.js",
     "test:e2e": "playwright test",
     "admin:set": "node scripts/admin.js",
-    "format:check": "prettier --check server.js public views tests scripts playwright.config.js"
+    "format:check": "prettier --check server.js lib public views tests scripts playwright.config.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

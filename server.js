@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { registerResultViews, resultViewSchema } from "./lib/result-views.js";
 import {
   mobileIdentity,
   ADMIN_MIN_WIDTH,
@@ -66,6 +67,7 @@ export async function createApp({ db, client, config = {} }) {
   if (!["name", "code"].includes(accessMode))
     throw Error("Invalid STUDENT_ACCESS_MODE");
   const schemas = {
+    resultViews: resultViewSchema,
     students: {
       required: ["_id", "name", "nameKey", "active"],
       properties: {
@@ -317,6 +319,28 @@ export async function createApp({ db, client, config = {} }) {
       changes,
       createdAt: new Date(),
     });
+  const resultStudent = async (req, studentId) => {
+    const _id = oid(studentId);
+    if (accessMode === "code" && req.session.studentId !== String(_id))
+      throw fail(401, "Enter your student access code");
+    const student = await db
+      .collection("students")
+      .findOne({ _id, active: true });
+    if (!student) throw fail(404, "Profile unavailable");
+    return student;
+  };
+  await registerResultViews({
+    app,
+    db,
+    guard,
+    wrap,
+    fail,
+    oid,
+    limiter,
+    audit,
+    resultStudent,
+    normalize,
+  });
   app.post(
     "/api/login",
     limiter(10, 900000, true),
@@ -1101,13 +1125,8 @@ export async function createApp({ db, client, config = {} }) {
     "/api/results/:id",
     limiter(120),
     wrap(async (req, res) => {
-      const _id = oid(req.params.id);
-      if (accessMode === "code" && req.session.studentId !== String(_id))
-        throw fail(401, "Enter your student access code");
-      const student = await db
-        .collection("students")
-        .findOne({ _id, active: true });
-      if (!student) throw fail(404, "Profile unavailable");
+      const student = await resultStudent(req, req.params.id),
+        _id = student._id;
       const papers = await db
         .collection("papers")
         .find({
@@ -1152,6 +1171,7 @@ export async function createApp({ db, client, config = {} }) {
     next(fail(404, "API endpoint not found")),
   );
   const adminPages = new Set([
+    "views",
     "marks",
     "students",
     "papers",

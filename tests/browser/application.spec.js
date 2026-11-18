@@ -1913,6 +1913,7 @@ for (const device of [
         "/admin/papers",
         "/admin/performance",
         "/admin/history",
+        "/admin/views",
       ]) {
         await page.goto(path);
         await expect(
@@ -2048,6 +2049,21 @@ test("non-local HTTP loads student and teacher assets without HTTPS upgrades", a
     await expect(
       page.getByRole("button", { name: /Single Student ·/ }),
     ).toBeVisible();
+    await page.getByRole("button", { name: /Single Student ·/ }).click();
+    await page.getByRole("button", { name: /Discover my results/ }).click();
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    const recorded = page.waitForResponse(
+      (r) =>
+        r.url().includes("/api/result-views") &&
+        r.request().method() === "POST",
+    );
+    await page.getByRole("button", { name: /Mathematics · Paper 01/ }).click();
+    expect((await recorded).status()).toBe(200);
+    expect(
+      await page.evaluate(() =>
+        localStorage.getItem("exam-result-portal.browser-id"),
+      ),
+    ).toMatch(/^[a-f0-9]{32}$/);
     await signIn(page, "/admin/login");
     await expect(page.locator(".workbook-grid")).toBeVisible();
     await expect(page.locator(".workbook-status")).toHaveText(
