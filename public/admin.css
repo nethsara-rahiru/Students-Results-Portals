@@ -1231,3 +1231,140 @@ body[data-admin-page="marks"] .workspace {
   min-width: 0;
   line-height: 1.25;
 }
+.view-privacy {
+  max-width: 900px;
+  color: #99adc4;
+  font-size: 12px;
+  line-height: 1.8;
+  margin: 18px 0 24px;
+}
+.view-filters {
+  display: flex;
+  align-items: flex-end;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+.view-filters label {
+  display: grid;
+  gap: 8px;
+  flex: 1;
+  min-width: 170px;
+  font-size: 12px;
+  color: #bdcadb;
+}
+.view-filters input,
+.view-filters select {
+  margin: 0;
+}
+.view-table-scroll {
+  overflow: auto;
+  max-width: 100%;
+}
+.view-table-scroll table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.view-table-scroll th,
+.view-table-scroll td {
+  padding: 15px 12px;
+  border-bottom: 1px solid #283348;
+  text-align: left;
+  vertical-align: top;
+}
+.view-table-scroll thead th {
+  color: #9db6cf;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.view-table-scroll tbody th {
+  color: #e3eafa;
+  min-width: 180px;
+  font-weight: 600;
+}
+.view-table-scroll small {
+  display: block;
+  color: #8198b3;
+  font-size: 10px;
+  line-height: 1.8;
+  font-weight: 400;
+}
+.view-table-caption {
+  text-align: left;
+  color: #93a8c0;
+  font-size: 11px;
+  padding: 10px 0;
+}
+.view-status {
+  display: inline-block;
+  padding: 5px 9px;
+  background: #243047;
+  border-radius: 6px;
+  color: #aebed2;
+  font-size: 10px;
+  white-space: nowrap;
+}
+.view-status--seen {
+  background: #153d443d;
+  color: #92d5ce;
+}
+.view-row-actions {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+  min-width: 150px;
+}
+.view-row-actions button {
+  padding: 7px 10px;
+  font-size: 10px;
+}
+.view-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
+  margin-top: 20px;
+  font-size: 12px;
+  color: #a7b8cc;
+}
+.view-dialog {
+  width: min(860px, 90vw);
+  max-height: 85svh;
+  overflow: auto;
+}
+.view-dialog .top {
+  align-items: flex-start;
+}
+.view-dialog h2 {
+  font-size: 22px;
+}
+.view-browser {
+  padding: 22px;
+  border: 1px solid #2c3850;
+  border-radius: 14px;
+  background: #151d2d;
+  margin-top: 16px;
+}
+.view-browser h3 {
+  font-size: 14px;
+  margin: 0;
+}
+.view-browser code {
+  display: block;
+  color: #8da9c6;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+  margin-top: 10px;
+}
+.view-browser-stats {
+  display: flex;
+  gap: 24px;
+  margin: 18px 0;
+  color: #aebdd1;
+  font-size: 12px;
+}
+.view-browser-stats strong {
+  color: #e8effa;
+  font-size: 22px;
+}

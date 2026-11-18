@@ -1,3 +1,4 @@
+import { ResultViewTracker } from "./result-view-tracker.js";
 import { inlineLoading } from "./loading.js";
 import { api, esc } from "./client.js";
 import { animateScore, motivation } from "./reveal.js";
@@ -12,6 +13,12 @@ export class StudentJourney {
     this.session = session;
     this.media = matchMedia("(prefers-reduced-motion: reduce)");
     this.state = "identify";
+    this.resultTracker = new ResultViewTracker(
+      () =>
+        !this.disposed &&
+        this.state === "reveal" &&
+        this.root?.dataset.complete === "true",
+    );
     this.animations = [];
     this.busy = false;
     this.profile = null;
@@ -522,7 +529,7 @@ export class StudentJourney {
       this.text("journey-kicker", "THIS CHAPTER BELONGS TO YOU");
       this.text(
         "journey-subtitle",
-        "A new perspective on the work you’ve put in. Ready to see how far you’ve come?",
+        "A new perspective on the work you’ve put in. Ready to see how far you’ve come? Result visits are counted per browser.",
       );
       this.text("journey-step", "YOUR RESULTS JOURNEY");
       this.actions(() => this.discover(), "Discover my results →");
@@ -546,6 +553,7 @@ export class StudentJourney {
         this.layout();
         return;
       }
+      this.resultTracker.startVisit();
       this.node("journey-progress").replaceChildren(
         ...this.data.papers.map((_, i) => {
           const item = document.createElement("li");
@@ -612,6 +620,7 @@ export class StudentJourney {
     if (this.busy || this.state !== "paper") return;
     const p = this.data.papers[this.index],
       last = this.index === this.data.papers.length - 1;
+    this.resultTracker.prepare(this.profile._id, p.id);
     this.root.dataset.final = String(last);
     this.skipEffects = false;
     this.scoreEffects.prepare(p.value, p.max, last);
@@ -662,7 +671,7 @@ export class StudentJourney {
     this.actions(
       last ? () => this.summary() : () => this.paper(this.index + 1),
       last ? "View all results" : "Next paper →",
-      last ? () => this.paper(0) : () => this.paper(this.index),
+      last ? () => this.replayJourney() : () => this.paper(this.index),
       last ? "Replay journey" : "Replay this paper",
     );
     this.text(
@@ -672,6 +681,7 @@ export class StudentJourney {
         : "ONE STEP FORWARD. KEEP GOING.",
     );
     this.scoreEffects.settle({ skip: this.skipEffects });
+    this.resultTracker.record();
     if (last) {
       this.accent.morph(0, this.media.matches || this.skipEffects ? 0 : 1200);
       if (!this.media.matches && !this.skipEffects)
@@ -700,6 +710,10 @@ export class StudentJourney {
         ),
       );
   }
+  replayJourney() {
+    this.resultTracker.startVisit();
+    return this.paper(0);
+  }
   summary() {
     return this.transition("summary", () => {
       this.heading("Your progress.");
@@ -709,7 +723,7 @@ export class StudentJourney {
         this.data.student + ", keep showing up for your next chapter.",
       );
       this.text("journey-step", "JOURNEY COMPLETE");
-      this.actions(() => this.paper(0), "Replay my journey");
+      this.actions(() => this.replayJourney(), "Replay my journey");
       this.text("journey-phase", "SMALL STEPS. MEANINGFUL PROGRESS.");
     });
   }
@@ -719,6 +733,7 @@ export class StudentJourney {
     this.finishMotion();
     this.accent.dispose();
     this.scoreEffects.dispose();
+    this.resultTracker.dispose();
     window.removeEventListener("resize", this.onResize);
     this.media.removeEventListener("change", this.onPreference);
   }

@@ -348,6 +348,7 @@ test("class boundaries, paper edit validation and Mongo schema validation", asyn
 });
 test("admin documents are separate protected pages with safe login redirects", async () => {
   const pages = [
+    "views",
     "marks",
     "students",
     "papers",

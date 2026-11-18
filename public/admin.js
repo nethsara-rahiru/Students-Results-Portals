@@ -1,9 +1,12 @@
+import { mountResultViews } from "./result-views-admin.js";
 import { loadingScreen, inlineLoading } from "./loading.js";
 import { installAdminDesktopGuard } from "./admin-access.js";
 import { mountMarksWorkbook } from "./marks-workbook.js";
 import { api, app, esc, btn, shell, notify } from "./client.js";
 let sessionInfo, sheet;
 const descriptions = {
+  views:
+    "See recorded result visits by student and browser, and reset view counts.",
   marks: "Make every mark count. Your papers, in one focused workspace.",
   students: "The people behind the progress. Manage profiles and access.",
   papers: "Prepare, organize and publish with confidence.",
@@ -12,6 +15,8 @@ const descriptions = {
   history: "A transparent record of changes across your workspace.",
 };
 const icons = {
+  views:
+    '<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>',
   marks: '<path d="M4 4h16v16H4zM4 10h16M10 4v16"/>',
   students:
     '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2m20 0v-2a4 4 0 0 0-3-3.87M16 3a4 4 0 0 1 0 8"/><circle cx="9" cy="7" r="4"/>',
@@ -32,6 +37,7 @@ const pageTitles = {
   classes: "Classes",
   performance: "Performance",
   history: "History",
+  views: "Result views",
 };
 const pagePaths = new Set(
   Object.keys(pageTitles).map((page) => "/admin/" + page),
@@ -227,7 +233,9 @@ async function admin() {
     );
   }
   async function render() {
-    if (page === "marks") {
+    if (page === "views") {
+      await mountResultViews(area, { classes: data.classes });
+    } else if (page === "marks") {
       area.innerHTML = `<div class="top"><div><h2>Marks worksheet</h2><p class="muted">Select a class beside Name. Students and paper marks fill automatically.</p></div></div><div id="flexible-workspace"></div>`;
       sheet = await mountMarksWorkbook(
         document.querySelector("#flexible-workspace"),

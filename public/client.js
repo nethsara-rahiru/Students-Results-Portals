@@ -13,7 +13,12 @@ export const esc = (s) =>
       ],
   );
 let csrfToken = "";
-export async function api(url, body, method = body ? "POST" : "GET") {
+export async function api(
+  url,
+  body,
+  method = body ? "POST" : "GET",
+  { keepalive = false } = {},
+) {
   const adminRequest = url === "/login" || /^\/admin(?:\/|$)/.test(url);
   const unsupported =
     adminRequest && restrictedAdminDevice(browserAdminSignals());
@@ -24,6 +29,7 @@ export async function api(url, body, method = body ? "POST" : "GET") {
     throw error;
   }
   const response = await fetch("/api" + url, {
+    ...(keepalive ? { keepalive: true } : {}),
     method,
     headers: {
       "Content-Type": "application/json",

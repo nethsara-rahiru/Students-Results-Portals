@@ -101,3 +101,10 @@ A Chromium check uses a non-local, untrustworthy HTTP browser origin forwarded t
 ## Styled loading states
 
 42 Node tests and 43 browser tests cover the loading-screen update. Deferred network responses verify branded student/admin startup, responsive layout, reduced-motion progress indicators, live status semantics, profile lookup activity, disabled sign-in activity, compact worksheet/history loaders and automatic removal when requests finish. Failure checks verify the loader is replaced with the existing error state and teacher retry recovers. Existing HTTP/production-header, desktop-only admin, worksheet and score-animation regressions remain included. Loading screenshots use controlled delays and synthetic records; production adds no minimum loading time.
+
+
+## Per-browser result views and audited resets
+
+48 Node tests and 46 browser tests cover this update. Six new API integration cases cover private report/reset access and CSRF, count-free result fetching, valid zero-mark recording, concurrent duplicate delivery, visit-versus-paper-replay counts, malformed/unpublished/absent/blank/wrong-class/inactive rejection, duplicate-name isolation, escaped search/class/status/pagination, all reset scopes, retained browser IDs, retry deduplication after reset, unchanged marks, audit events and matching access-code grants.
+
+Browser cases exercise actual multi-paper reveals, individual/full replays, reload persistence, separate browser profiles, clearing localStorage, report/details and all UI reset scopes. Simulated storage failure uses a document-only ID; a lost acknowledgement retries the same event without double counting; repeated tracking failures leave marks available. A simulated document visibility change checks that hidden completion waits for visibility before recording. The non-local HTTP case now completes a reveal and checks successful view recording/ID creation, without relying on secure-context-only randomUUID. Existing student/admin/worksheet, HTTP-security, accessibility and motion regressions remain. Activity screenshots use synthetic records.
